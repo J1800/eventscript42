@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>EventScript42</title>
+	<link rel="icon" href="appIcon.png" sizes="180x180">
+	<link rel="apple-touch-icon" href="appIcon.png">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-title" content="EventScript42">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+	<meta charset="UTF-8">
+	<style>
+		html,body{--o:1;--r:60;overscroll-behavior:none}
+		body{background-color:black;margin:0;pointer-events:none;-webkit-user-select:none;user-select:none}
+		#canv{position:fixed;will-change:height,left,top,width}
+		@media(orientation:landscape){
+			body{--d:to right}
+			#slider{height:100dvh;width:32px}
+			#codeWriter{bottom:calc(35% + 4px);left:40px;right:16px;top:16px}
+			#consoleDiv{left:40px;top:calc(65% + 4px)}
+			#consInp{left:40px}
+			#canv{height:100dvh;width:calc(var(--r) * 1dvw)}
+			#workspace{height:100dvh;left:calc(var(--r) * 1dvw);top:0;}
+		}
+		@media(orientation:portrait){
+			body{--d: to bottom}
+			#slider{height:32px;width:100dvw}
+			#codeWriter{bottom:16px;left:16px;right:calc(35% + 8px);top:40px;}
+			#consoleDiv{left:calc(65% + 4px);top:40px}
+			#consInp{left:calc(65% + 4px)}
+			#canv{height:calc(var(--r) * 1dvh);width:100dvw}
+			#workspace{height:calc(100dvh - var(--r) * 1dvh);left:0;top:calc(var(--r) * 1dvh);}
+		}
+		#workspace{position:fixed;background:linear-gradient(var(--d),#040F2E 0 20px,#020717);right:0;will-change:height,left,top,width}
+		#slider{position:absolute;background:linear-gradient(var(--d),#7F91C4 0%,#4D63B0 12%,#25458F 24%,#081956 62%,#040F2E 100%);will-change:background,left,top,width,height}
+		@media(any-hover:hover){
+			#slider:hover{background:linear-gradient(var(--d),#CD6600 0%,#A55200 12%,#7D3E00 24%,#552A00 62%,#040F2E 100%)}
+			.consoleLn:hover{background:#6b7dc6;color:navy}
+		}
+		#slider:active{background:linear-gradient(var(--d),#963C00 0%,#782800 12%,#5A1E00 24%,#3C1400 62%,#040F2E 100%)}
+		#codeWriter{background-color:#1e1e1e;border:2px solid #5d6f7c;border-radius:0;color:#d4d4d4;font-size:14px;opacity:var(--o);outline:none;position:absolute;resize:none;scrollbar-color:#5a5a5a transparent;tab-size:4;white-space:pre;will-change:height,left,top,width}
+		#consoleDiv {background-color:#0c0c46;border:2px solid #3e5483;bottom:40px;color:#52688e;display:flex;flex-direction:column;font-family:system-ui;font-size:12px;justify-content:flex-end;opacity:var(--o);overflow-x:hidden;overflow-y:auto;position:absolute;right:16px;scrollbar-color:#4d63b0 transparent;scroll-behavior:smooth;;will-change:height,left,top,width;word-wrap:break-word}
+		#consInp{background-color:navy;border:2px solid #576dba;border-radius:0;bottom:16px;color:#576dba;font-size:12px;opacity:var(--o);outline:none;position:absolute;right:16px;
+			top:calc(100% - 32px);will-change:background,height,left,top,width}
+		@keyframes colorFade{0%{background-color:#1e7a00}100%{background-color:#6b7dc6}}
+		#colorTestDiv{width:0;height:0}
+	</style>
+</head>
+<body onload="onLoad()">
+<canvas id="canv" onmousedown="canvOXY(event)" onwheel="canvOS(event)"></canvas>
+<div id="workspace">
+	<div id="slider" onmousedown="slide(event)" ontouchstart="slide(event)"></div>
+	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)"></textarea>
+	<div id="consoleDiv"></div>
+	<input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" onkeydown="consInpKd(event)" oninput="consInpInp(event)" value=">">
+</div>
+<div id="colorTestDiv"></div>
+<script>
+/* --- full v42 vm instrs ---
+cat 0 (operators/functions)
+	0: nos+tos  
+	1: nos-tos  
+	2: nos*tos  
+	3: nos/tos  
+	4: nos%tos  
+	5: nos^tos  
+	6: -tos (unary minus)
+	7: comp nos=tos
+	8: comp nos!=tos
+	9: comp nos<tos
+	10: comp nos>tos
+	11: comp nos<=tos
+	12: comp nos>=tps
+	13: func cos
+	14: func sin 
+	15: func tan
+	16: func abs
+	17: func sqrt
+	18: func min
+	19: func max
+	20: func mod
+cat 1 (solids aka operands)
+	21: para end (disapears in pf, reused in vm)
+	22: deltaTime (dt)
+	23: globalTime (gt)
+	24: inline number
+	25-58: read prop
+	59–92: read prop external-eo
+	93-118: keyA to keyZ (shorthand, means held)
+	119–144: keyAUp to keyZUp
+	145–170: keyADown to keyZDown
+	171: cursorX
+	172: cursorY
+	173: mouse (aka mouseHeld)
+	174: mouseUp
+	175: mouseDown
+	176: pitch
+	177: roll
+	178: yaw
+	179: naturalWidth (nw)
+	180: naturalHeight (nh)
+cat 2 (starts)
+	181: para start (disapears in pf, reused in vm)
+	182: comma (disapears in pf, reused in vm)
+// no cat (added after buildPF)
+	21: objStrt (add [+1] to nSet, if in oSet, jump to [+2] else +3)
+	181: eoStrt (add to eoStk)
+	182: eoDrop (pop from eoStk, add to drwStk)
+	183-202: write prop
+	203-222: write prop external eo
+	223: intrvlStrt (if t1<t<t2, +4, else jmp [+3])
+	224: tlStrt (if t1<t<t2 in idx, jmp to idx, else jmp over)
+	225: pgStrt (if pg in range, jmp to [+pg] else jmp over)
+	226: cond jmp (stkPop 1 jmp to [+1] else +2, used for chks)
+	227: uncond jmp to [+1]
+	228: endScr
+*/
+// --- section 0: gbls ---
+// 0.0: glbs for building scr vm
+const pool=new Array(512).fill().map(()=>[]);let p=0; // objPool and it
+const pm={ // 0-19 rw, 20-29 custom rw, 30-33 r, 34-45 h
+	time:0,scale:1,width:2,height:3,left:4,top:5,
+	startChar:6,endChar:7,source:8,red:9,green:10,blue:11,
+	opacity:12,rotate:13,fontSize:14,sourceTime:15,sourceRate:16,
+	volume:17,page:18,multi:19,right:30,bottom:31,centerX:32,
+	centerY:33,inhRotate:34,parent:35,wPx:36,hPx:37,uPx:38,
+	lPx:39,tPx:40,cxPx:41,cyPx:42,nOpa:43,nVol:44,mediaFlg:45
+};
+const dm=new Float32Array([
+	0,1,1,1,-0.5,-0.5,0,100,-1,1,1,1,0.4,0,0.2,0,1,1,0,1
+]);
+let oCnt=0,eoCnt=0;
+const im={cos:13,sin:14,tan:15,abs:16,sqrt:17,min:18,max:19,mod:20,
+dt:22,gt:23,cursorX:171,cursorY:172,mouse:173,mouseUp:174,mouseDown:175,
+pitch:176,roll:177,yaw:178,nw:179,nh:180}; // pf, more vals filled below
+for(let i=0;i<26;i++)im["key"+String.fromCharCode(65+i)]=93+i;
+for(let i=0;i<26;i++)im["key"+String.fromCharCode(65+i)+"Up"]=119+i;
+for(let i=0;i<26;i++)im["key"+String.fromCharCode(65+i)+"Down"]=145+i;
+const em=new Map(); // eoMap, lb:eoNum
+const prm=[0,0,1,1,1,2,3,-1,-1,-1,-1,-1,-1]; // precmap for ops
+// 0.1: typed arrs and iterators, used mixed for build/read
+const a=new Uint16Array(32768); let z=0; // scr instrs
+const b=new Float64Array(32768); // eo prop flts
+const b2=new Float64Array(2048);let y2=0; // flts from scr inline numbers
+const c=new Uint16Array(8192); let x=0; // stk eg for pf build, also eostk on read
+const d=new Uint16Array(8192); // stk used minorly in pf build, also drwStk on read
+const e=new Float64Array(256); // 64fltstk for calcs in read()
+const srcs=[]; // arr of strings (src keys)
+const srcTs=new Uint8Array(512); // 0-4, img, sound etc
+// 0.2: glbs used for read()
+const ctx=canv.getContext("2d",{alpha:false});
+let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=100,gt=0,gs=1,pgT=performance.now();
+const kh=new Uint8Array(26); // keys currently held on that frame
+const kd=new Uint8Array(26); // keys pressed down on that frame
+const ku=new Uint8Array(26); // keys released on that frame
+let cursX=0,cursY=0,mh=0,md=0,mu=0; // cursor pos/mouseheld/down/up
+let pitch=0,roll=0,yaw=0; // phone tilt
+const oSet=new Uint8Array(1024); // actObjs
+const nSet=new Uint8Array(1024); // actObjs
+const eles=[]; // scaffold, for read to check if imm available
+const strArr = new Array(1024);
+let oMed=new Map(),nMed=new Map();
+let animId=null; // for calling next frameDraw
+const strCache=new Map(); // reusing strs+split arr for text src
+// 0.3: file storage, persist through cmpls unless cleared
+const fileCache={}; // str key to file
+const eleCache=new Map(); // file to 3 arr/3 types
+// --- section 1: webpage funcs ---
+// 1.0: slider mousedown
+const slide=(e)=>{
+	const ls=window.matchMedia("(orientation: landscape)").matches;
+	const mx=e.clientX,my=e.clientY;
+	const tx=e.touches?.[0].clientX,ty=e.touches?.[0].clientY;
+	const intlCsr=ls?(mx||tx):(my||ty);
+	const intlRat=Number(getComputedStyle(document.body).getPropertyValue('--r'));
+	const mm=(e)=>{
+		const mx=e.clientX,my=e.clientY;
+		const tx=e.touches?.[0].clientX,ty=e.touches?.[0].clientY;
+		const c=ls?(mx||tx):(my||ty);
+		const dRat=(c-intlCsr)/(ls?innerWidth:innerHeight);
+		const newR=intlRat+dRat*100;
+		document.body.style.setProperty('--r',newR<10?10:newR>75?75:newR);
+		refresh(null);
+	}
+	const mu=()=>{
+		document.removeEventListener('mousemove',mm);
+		document.removeEventListener('mouseup',mu);
+		document.removeEventListener('touchmove',mm);
+		document.removeEventListener('touchend',mu);
+	};
+	if(e.type==='mousedown'){
+		document.addEventListener('mousemove',mm);
+		document.addEventListener('mouseup',mu);
+	}else if(e.type==='touchstart'){
+		document.addEventListener('touchmove',mm);
+		document.addEventListener('touchend',mu);
+	}
+};
+// 1.1: codeWriter keydown (oninput-e hdls the buildVM)
+const cwKd=(e)=>{
+	if(e.key==='Tab'){
+		e.preventDefault();
+		const cw=codeWriter,cwV=cw.value;
+		const s1=codeWriter.selectionStart;
+		const s2=codeWriter.selectionEnd;
+		codeWriter.value=cwV.substring(0,s1)+'\t'+cwV.substring(s2);
+		codeWriter.selectionStart=cw.selectionEnd=s1+1;
+		buildVM();
+	}
+};
+// 1.2: refresh display vars (e.g. upon resize)
+const refresh=(e)=>{
+	const w=(innerWidth-200)/50,h=(innerHeight-100)/50;
+	document.body.style.setProperty('--o',Math.min(w,h));
+	rw=canv.offsetWidth*window.devicePixelRatio;
+	rh=canv.offsetHeight*window.devicePixelRatio;
+	ru=Math.min(rw,rh); rcx=0.5*rw; rcy=0.5*rh;
+	canv.width=rw; canv.height=rh;
+	ctx.imageSmoothingEnabled=false; ctx.textAlign='left';
+	ctx.textBaseline='top';
+};
+// 1.3: page onLoad
+const onLoad=()=>{
+	refresh(null); window.addEventListener('resize',refresh);
+	document.addEventListener("keydown",e=>kh[e.key.charCodeAt(0)-97]=1);
+	document.addEventListener("keyup",e=>kh[e.key.charCodeAt(0)-97]=0);
+	window.addEventListener("deviceorientation",e=>{pitch=e.beta;roll=e.gamma;yaw=e.alpha;});
+	cOut('Welcome to the EventScript prototype. At some point, typing HELP will load a manual');
+	buildVM(); animId=requestAnimationFrame(read);
+	document.body.style.pointerEvents='auto';
+	if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js')
+
+};
+// 1.4: drag on canv to edit pos offset
+const canvOXY=(e)=>{
+	const ix=e.clientX,iy=e.clientY,iOX=ox,iOY=oy;
+	const mm=(e)=>{
+		const dx=e.clientX-ix,dy=e.clientY-iy;
+		ox=iOX+dx,oy=iOY+dy;
+	};
+	const mu=()=>{
+		document.removeEventListener('mousemove', mm);
+		document.removeEventListener('mouseup', mu);
+	};
+	document.addEventListener('mousemove', mm);
+	document.addEventListener('mouseup', mu);
+};
+// 1.5: mousewheel/pinch canv to edit offset scale
+const canvOS=(e)=>{
+	e.preventDefault(); const dPc=0.001*os*-e.deltaY;
+	os=Math.min(100,Math.max(0.01,os+dPc));
+};
+// --- section 2: building vm from scr string ---
+// 2.0: buildVM, usually called on codeWrite key input
+const buildVM=()=>{
+	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=100,em.clear(),strCache.clear();
+	srcs.length=0,eles.length=0,strArr.fill(undefined);
+	for(let[v]of oMed)v.pause(); oMed.clear();
+	z=0,x=0,y2=0,gt=0;
+	const tree=buildTree(codeWriter.value);
+	emO(tree, null);
+	a[z++]=181; a[z++]=tree[2]; // eo instr and eoNum
+	fltn(tree[1],oCnt++);a[z++]=182;a[z]=228;
+	oSet.fill(0,0,oCnt); nSet.fill(0,0,oCnt);
+}
+// 2.1: build a generic tree based upon tabs of each line
+const buildTree=(str)=>{
+	const lns=str.split('\n');
+	const inds=new Array(lns.length);
+	for(let i=0;i<lns.length;i++){
+		let c=0,s=lns[i];
+		while(s[c]==="\t")c++;inds[i]=c;
+	}
+	let ed=0; // expected depth
+	const rt=pool[p++]; rt.length=0;
+	rt.push('#root',pool[p++],null);
+	rt[1].length=0; let tar=rt;
+	for(let i=0;i<lns.length;i++) {
+		const str=lns[i].trim();
+		if(!str.length)continue;
+		if(inds[i]>ed)continue;
+		while(inds[i]<ed)tar=tar[2],ed--;
+		const o=pool[p++]; o.length=0;
+		o.push(str,pool[p++],tar); o[1].length=0;
+		tar[1].push(o); tar=o; ed++; 
+	}
+	return rt;
+};
+// 2.2: differentiate node by type (aka embellish object), call on root
+const emO=(o,eoNum)=>{
+	switch(true){
+		case(o[0]==='timeline'):
+			o[0]=2; let tAcc=0; 
+			for(let i=0;i<o[1].length;i++){
+				o[1][i][0]=(Number(o[1][i][0])||0);
+				for(let j=0;j<o[1][i][1].length;j++)emO(o[1][i][1][j],eoNum);
+			}break;
+		case(o[0]==='pages'):
+			o[0]=4; for(let i=0;i<o[1].length;i++)
+				for(let j=0;j<o[1][i][1].length;j++)emO(o[1][i][1][j],eoNum);
+			break;
+		case(o[0]==='sources'): o[0]=6; break;
+		case(o[0]==='images'): o[0]=7; break;
+		case(o[0]==='texts'): o[0]=8; break;
+		case(o[0]==='sounds'): o[0]=9; break;
+		case(o[0]==='videos'): o[0]=10; break;
+		case(o[0]==='scripts'): o[0]=11; break;
+		case (o[0].includes(' to ')):
+			for(let i=0;i<o[1].length;i++)emO(o[1][i],eoNum);
+			const[s1,s2]=l.split('to');
+			o[0]=3;o[2]=Number(s1)||0;o[3]=Number(s2)||0;reak;
+		case(/[<>=]/.test(o[0])):
+			for(let i=0;i<o[1].length;i++)
+				for(let j=0;j<o[1][i][1].length;j++)emO(o[1][i][1][j],eoNum);
+			o[2]=o[0]; o[0]=5; o[3]=eoNum; break; 
+		case(/^[a-z][a-zA-Z0-9]*(\s|$)/.test(o[0])):
+			let onSt=null,tar=null;
+			const onDrw=o[1][1]?.[0]||null; si=o[0].search(/\s/);
+			if(si>-1)[tar,onSt]=[o[0].slice(0,si),o[0].slice(si+1)];
+			else onSt=o[1][0]?.[0]||null,tar=o[0];
+			o[0]=1; o[1]=tar;o[2]=onSt;o[3]=onDrw;o[4]=eoNum;break; 
+		case(/^\#[a-z][a-z0-9]*$/.test(o[0])):
+			const nxEoNum=eoCnt++; em.set(o[0],nxEoNum);
+			for(let i=0;i<o[1].length;i++)emO(o[1][i],nxEoNum);
+			o[0]=0; o[2]=nxEoNum; 
+			b.set(dm,nxEoNum*45);b.fill(0,nxEoNum*45+dm.length,nxEoNum*45+45);
+			b[nxEoNum*45+35]=eoNum;
+			break;
+		default:o[0]=12;
+	}
+};
+// 2.3: flatten node into instructions (call on root) 
+const fltn=(arr,oNum)=>{
+	a[z++]=21; a[z++]=oNum; let jmp=z++; const xs=x;
+	for(let i=0;i<arr.length;i++)
+		if(arr[i][0]===1)fltnProp(arr[i],true);
+	a[jmp]=z;
+	for(let i=0;i<arr.length;i++){
+		let o=arr[i]; switch(o[0]){
+			case 0:
+				a[z++]=181; a[z++]=o[2]; // eo instr + num
+				fltn(o[1],oCnt++); 
+				a[z++]=182; break; // eoDrop instr
+			case 1: 
+				fltnProp(o,false); break;
+			case 2:
+				// // tlStrt,cnt,n*[dur,jmpOvIdx,intrr]
+				a[z++]=224; a[z++]=o[1].length;
+				for(let j=0;j<o[1].length;j++){
+					a[z++]=y2; b2[y2++]=o[1][j][0];
+					const jmp=z++; fltn(o[1][j][1],oCnt++);
+					a[z++]=227; c[x++]=z++; a[jmp]=z;
+				} break;
+			case 3:
+				a[z++]=223;
+				a[z++]=y2; b2[y2++]=o[2]; // start time
+				a[z++]=y2; b2[y2++]=o[3]; // end time
+				jmp=z++;
+				fltn(o[1],oCnt++); a[jmp]=z; break;
+			case 4:
+				// 225, cnt, jmpO, ...pgIdxs (a[i+3+pg]) ...pgs
+				a[z++]=225; a[z++]=o[1].length; c[x++]=z++;
+				const tblSt=z;
+				for(let j=0;j<o[1].length;j++){
+					a[tblSt+j]=z;
+					fltn(o[1][j][1],oCnt++);
+					a[z++]=227; c[x++]=z++;
+				} break;
+			case 5: // chks
+				const iSt=i;
+				while(o[1].length===0)
+					if(arr[i+1]?.[0]===5)o=arr[++i];else break;
+				for(let j=iSt;j<i;j++)
+					if(buildPF(arr[j][2]),arr[j][3])a[z++]=226,c[x++]=z++;
+				a[z++]=227; const jmpO=z++; // uncond jmp over
+				while(x>xs)a[c[x--]]=z; // fill cnd jmp idxes
+				fltn(o[1],oCnt++); a[jmpO]=z; break;
+			case 6: // srcs
+				for(let j=0;j<o[1].length;j++){
+					const so=o[1][j],ty=so[0]>6?so[0]-7:0;
+					if(ty){
+						for(let k=0;k<so[1].length;k++){
+							const srcIdx=srcs.length;
+							srcs[srcIdx]=so[1][k][0];
+							eles[srcIdx]=null;
+							srcTs[srcIdx]=ty;
+						}
+					}
+				}
+		}
+		while(x>xs)a[c[x--]]=z;break;
+	}
+}
+// 2.4: spec flatten, used by 2.3
+const fltnProp=(o,start)=>{
+	if(!o[start?2:3])return;
+	const tar=o[1],expr=o[start?2:3],wInstr=pm[tar],eoNum=o[4];
+	if(wInstr<20)if(buildPF(expr)){a[z++]=183+wInstr;return;}
+	let relO=-1;
+	for(let j=eoNum*10;j<eoNum*10+10;j++){
+		if(strArr[j]===tar){relO=j-eoNum*10;break;}
+		if(!strArr[j]){strArr[j]=tar;relO=j-eoNum*10;break;}
+	}
+	if(relO===-1)return;
+	if(buildPF(expr))a[z++]=183+20+relO;
+}
+// 2.5: outputs postfix instrs from str, used during flatten funcs
+const buildPF=(str, eoNum)=>{
+	const xs=x; // toks pushed to top of stk so track curr top
+	const zs=z; // used to ret bool at end depending on if anything actually added
+	let p=2; // prev cat (0:ops,1:solids,2:strts)
+	let val=0; // last valid expr len
+	let k=0; // depth (d (2nd glb stk)) iterator
+	let is=0; // iStrt, used for str cuttings
+	let relO; // rel offset, used for cust props
+	lp:for(let i=0;i<str.length;i++){ // tokenize and sanitize infix
+		switch (str[i]){
+			case '+':if(p!==1)break lp;c[x++]=0;p=0;break;
+			case '-':c[x++]=(p==1?1:6);p=0;break;
+			case '*':if(p!==1)break lp;c[x++]=2;p=0;break;
+			case '/':if(p!==1)break lp;c[x++]=3;p=0;break;
+			case '%':if(p!==1)break lp;c[x++]=4;p=0;break;
+			case '^':if(p!==1)break lp;c[x++]=5;p=0;break;
+			case '=':if(p!==1)break lp;c[x++]=7;p=0;break;
+			case '!':if(p!==1||str[++i]!=='=')break lp;c[x++]=8;p=0;break;
+			case '<':
+				if(p!==1)break lp; if(str[i+1]==='=')i++,c[x++]=11;
+				else c[x++]=9;p=0; break;
+			case '>':
+				if(p!==1)break lp; if(str[i+1]==='=')i++,c[x++]=12;
+				else c[x++]=10;p=0; break;
+			case 'a':case 'b':case 'c':case 'd':case 'e':case 'f':case 'g':
+			case 'h':case 'i':case 'j':case 'k':case 'l':case 'm':case 'n':
+			case 'o':case 'p':case 'q':case 'r':case 's':case 't':case 'u':
+			case 'v':case 'w':case 'x':case 'y':case 'z':
+				if(p===1)c[x++]=2;is=i;while(/^[a-zA-Z0-9.]$/.test(str[++i]));
+				const v=str.slice(is,i--); const instr=im[v];
+				if(instr<21){
+					if(str[++i]!=='(')break lp;
+					c[x++]=instr;d[k++]=(instr>17?1:0);p=2;break;
+				}
+				if(instr){c[x++]=instr;p=1;if(k===0)val=x;break;}
+				if(pm[v]<34){c[x++]=pm[v]+25;p=1;if(k===0)val=x;break}
+				relO=-1;
+				for(let j=eoNum*10;j<eoNum*10+10;j++)
+					if(strArr[j]===v){relO=j-eoNum*10;break;}
+				if(relO===-1)break lp;
+				c[x++]=relO+20+25;if(k===0)val=x;p=1;break;
+			case '#': 
+				if(p===1)c[x++]=2; is=i;
+				while(/^[a-zA-Z0-9]$/.test(str[++i]));
+				if(str[i]!=='.')break lp;
+				const eoLbl=str.slice(is,i++); is=i;
+				while(/^[a-zA-Z0-9.]$/.test(str[++i]));
+				const propLbl=str.slice(is,i--);
+				if(!em.has(eoLbl))break lp;
+				const tarEoNum=em.get(eoLbl);
+				if(pm[v]<34){
+					c[x++]=pm[v]+59;c[x++]=tarEoNum;
+					p=1;if(k===0)val=x;break
+				}
+				relO=-1;
+				for(let j=tarEoNum*10;j<tarEoNum*10+10;j++){
+					if(strArr[j]===propLbl){relO=j-tarEoNum*10;break;}
+				}
+				if(relO===-1)break lp;
+				c[x++]=relO+20+59;if(k===0)val=x;p=1;break;
+			case ')':
+				if(p!==1||d[k-1]!==0)break lp;
+				c[x++]=21;k--;if(k===0)val=x;break;
+			case '0':case '1':case '2':case '3':case '4':case '5':case '6':
+			case '7':case '8':case '9':
+				if(p===1)c[x++]=2;
+				is=i;while(/^[a-z0-9.]$/.test(str[++i]));
+				c[x++]=24;c[x++]=y2;b2[y2++]=parseFloat(str.slice(is,i--));
+				if(k===0)val=x;p=1;break;
+			case '(': if(p===1)c[x++]=2; c[x++]=181;d[k++]=0;p=2;break;
+			case ',': if(p!==1||d[k-1]<1)break lp;d[k-1]--;c[x++]=182;p=2;break;
+			case ' ': case '\t': break; default: break lp;
+		}
+	}
+	c[val++]=183; x=xs; let i=xs; // i instr it, x stk it
+	lp:while(true){ // shunting yard
+		const v=c[i]; switch(v){
+			case 0:case 1:case 2:case 3:case 4:case 6:case 7:case 8:case 9:
+			case 10:case 11:case 12: // ops lft assoc (5 is rght assoc)
+				while(prm[v]<=prm[c[x-1]])a[z++]=c[--x];c[x++]=v;break;
+				while(prm[v]<prm[c[x-1]])a[z++]=c[--x];c[x++]=v;break;
+			case 13:case 14:case 15:case 16:case 17:case 18:case 19:case 20:
+			case 181: c[x++]=v;break; // funcs and para start
+			case 21: while(c[x-1]!==181)a[z++]=c[--x];x--; // para end
+				if(c[x-1]>12&&c[x-1]<21)a[z++]=c[--x];break; // hdl func
+			case 24:case 59:case 60:case 61:case 62:case 63:case 64:case 65:
+			case 66:case 67:case 68:case 69:case 70:case 71:case 72:case 73:
+			case 74:case 75:case 76:case 77:case 78:case 79:case 80:case 81:
+			case 82:case 83:case 84:case 85:case 86:case 87:case 88:case 89:
+			case 90:case 91:case 92: // nums and ext prop
+				a[z++]=v;a[z++]=c[++i];break;
+			case 22:case 23:case 25:case 26:case 27:case 28:case 29:case 30:
+			case 31:case 32:case 33:case 34:case 35:case 36:case 37:case 38:
+			case 39:case 40:case 41:case 42:case 43:case 44:case 45:case 46:
+			case 47:case 48:case 49:case 50:case 51:case 52:case 53:case 54:
+			case 55:case 56:case 57:case 58:case 93:case 94:case 95:case 96:
+			case 97:case 98:case 99:case 100:case 101:case 102:case 103:case 104:
+			case 105:case 106:case 107:case 108:case 109:case 110:case 111:case 112:
+			case 113:case 114:case 115:case 116:case 117:case 118:case 119:case 120:
+			case 121:case 122:case 123:case 124:case 125:case 126:case 127:case 128:
+			case 129:case 130:case 131:case 132:case 133:case 134:case 135:case 136:
+			case 137:case 138:case 139:case 140:case 141:case 142:case 143:case 144:
+			case 145:case 146:case 147:case 148:case 149:case 150:case 151:case 152:
+			case 153:case 154:case 155:case 156:case 157:case 158:case 159:case 160:
+			case 161:case 162:case 163:case 164:case 165:case 166:case 167:case 168:
+			case 169:case 170:case 171:case 172:case 173:case 174:case 175:case 176:
+			case 177:case 178:case 179:case 180:// glbs and loc prop, inputs etc
+				a[z++]=v;break;
+			case 182: while(c[x-1]!==181)a[z++]=c[--x];break; // comma
+			case 183: break lp;
+		} i++;
+	} while(xs<x)a[z++]=c[--x]; return z>zs; // emp the stk
+}
+// ---section 3: reading the VM each frame---
+// 3.0: main frame fraw func (VM->Frame)
+const read=()=>{
+	const ndt=0.001*performance.now()-pgT,dt=ndt*gs;
+	pgT=pgT+ndt; gt=gt+dt;
+	ctx.clearRect(0,0,rw,rh);
+	let i=0,j=0; // instrs(a)it,fltstk(e)it
+	let k=0,l=0; // eoStk(c)it,drwStk(d)it;
+	let eof=0; // used in w/r instrs, updated on eoStrt
+	lp:while(true){
+		switch(a[i]){
+			case 0: e[j-2]+=e[--j];i++;break; // +
+			case 1: e[j-2]-=e[--j];i++;break; // -
+			case 2: e[j-2]*=e[--j];i++;break; // *
+			case 3: e[j-2]/=e[--j];i++;break; // /
+			case 4: e[j-2]%=e[--j];i++;break; // %
+			case 5: e[j-2]**=e[--j];i++;break; // ^
+			case 6: e[j-1]=-e[j-1];i++;break; // u-
+			case 7: e[j-2]=e[j-2]==e[--j]?1:0;i++;break; // =
+			case 8: e[j-2]=e[j-2]!=e[--j]?1:0;i++;break; // !=
+			case 9: e[j-2]=e[j-2]<e[--j]?1:0;i++;break; // <
+			case 10: e[j-2]=e[j-2]>e[--j]?1:0;i++;break; // >
+			case 11: e[j-2]=e[j-2]<=e[--j]?1:0;i++;break; // <=
+			case 12: e[j-2]=e[j-2]>=e[--j]?1:0;i++;break; // >=
+			case 13: e[j-1]=Math.cos(e[j-1]);i++;break; // cosF
+			case 14: e[j-1]=Math.sin(e[j-1]);i++;break; // sinF
+			case 15: e[j-1]=Math.tan(e[j-1]);i++;break; // tanF
+			case 16: e[j-1]=e[j-1]<0?-e[j-1]:e[j-1];i++;break; // absF
+			case 17: e[j-1]=Math.sqrt(e[j-1]);i++;break; // sqrtF
+			case 18: e[j-2]=Math.max(e[j-2],e[--j]);i++;break; // minF
+			case 19: e[j-2]=Math.min(e[j-2],e[--j]);i++;break; // maxF
+			case 20: e[j-2]=((e[j-2]%e[j-1])+e[j-1])%e[--j];i++;break; // modF
+			case 21: nSet[a[i+1]]=1,i=oSet[a[i+1]]?a[i+2]:i+3;break; // oSt
+			case 22: e[j++]=dt;i++;break; // dt
+			case 23: e[j++]=gt;i++;break; // gt
+			case 24: e[j++]=b2[a[++i]];i++;break; // num
+			case 25:case 26:case 27:case 28:case 29:case 30:case 31:case 32:
+			case 33:case 34:case 35:case 36:case 37:case 38:case 39:case 40:
+			case 41:case 42:case 43:case 44:case 45:case 46:case 47:case 48:
+			case 49:case 50:case 51:case 52:case 53:case 54:case 55:case 56:
+			case 57:case 58: e[j++]=b[eof+(a[i]-25)];i++;break; // r-prop //// no i incr?!
+			case 59:case 60:case 61:case 62:case 63:case 64:case 65:case 66:
+			case 67:case 68:case 69:case 70:case 71:case 72:case 73:case 74:
+			case 75:case 76:case 77:case 78:case 79:case 80:case 81:case 82:
+			case 83:case 84:case 85:case 86:case 87:case 88:case 89:case 90:
+			case 91:case 92:e[j++]=b[++i*45+(a[i-1]-59)];i++;break; // r-prop-ex
+			case 93:case 94:case 95:case 96:case 97:case 98:case 99:case 100:
+			case 101:case 102:case 103:case 104:case 105:case 106:case 107:case 108:
+			case 109:case 110:case 111:case 112:case 113:case 114:case 115:case 116:
+			case 117:case 118: e[j++]=kh[a[i]-93];i++;break; // key-h
+			case 119:case 120:case 121:case 122:case 123:case 124:case 125:case 126:
+			case 127:case 128:case 129:case 130:case 131:case 132:case 133:case 134:
+			case 135:case 136:case 137:case 138:case 139:case 140:case 141:case 142:
+			case 143:case 144: e[j++]=ku[a[i]-119];i++;break; // key-u
+			case 145:case 146:case 147:case 148:case 149:case 150:case 151:case 152:
+			case 153:case 154:case 155:case 156:case 157:case 158:case 159:case 160:
+			case 161:case 162:case 163:case 164:case 165:case 166:case 167:case 168:
+			case 169:case 170: e[j++]=kd[a[i]-145];i++;break; // key-d
+			case 171: // curs-X
+			case 172: // curs-Y
+			case 173: // mouse-h
+			case 174: // mouse-u
+			case 175: // mouse-d
+			case 176: // pitch
+			case 177: // roll
+			case 178: // yaw
+			case 179: // nw want same as sRdy in the crunch..
+			case 180: // nh
+			case 181: c[k++]=a[++i];eof=45*a[i++];break;    // eoSt
+			case 182: d[l++]=c[--k]; // eo end
+			case 183:case 189:case 190:case 191:case 192:case 193:case 194:case 195:
+			case 196:case 198:case 199:case 200:case 201:case 202:
+			b[eof+(a[i]-183)]=e[--j];i++;break; // wp general case
+			case 197:b[eof+15]=e[--j];b[eof+45]=1;i++;break; // wp srcTime
+			case 184: // wp scale
+				b[eof+1]=e[--j]; // s=tos
+				b[eof+2]=b[eof+2]*b[eof+1]; // w=w*scale
+				b[eof+30]=b[eof+4]+b[eof+2]; // r=l+w
+				b[eof+32]=b[eof+4]+0.5*b[eof+2]; // cx=l+0.5*w
+				b[eof+3]=b[eof+3]*b[eof+1]; // h=h*scale
+				b[eof+31]=b[eof+5]+b[eof+3]; // b=t+h
+				b[eof+33]=b[eof+5]+0.5*b[eof+3]; // cy=t+0.5*h
+				i++;break;
+			case 185: // wp width
+				b[eof+2]=e[--j]*b[eof+1]; // w=tos*scale
+				b[eof+30]=b[eof+4]+b[eof+2]; // r=l+w
+				b[eof+32]=b[eof+4]+0.5*b[eof+2]; // cx=l+0.5*w
+				i++;break;
+			case 186: // wp height
+				b[eof+3]=e[--j]*b[eof+1]; // h=tos*scale
+				b[eof+31]=b[eof+5]+b[eof+3]; // b=t+h
+				b[eof+33]=b[eof+5]+0.5*b[eof+3]; // cy=t+0.5*h
+				i++;break;
+			case 187: // wp left
+				b[eof+4]=e[--j]; // l=tos
+				b[eof+30]=b[eof+4]+b[eof+2]; // r=l+w
+				b[eof+32]=b[eof+4]+0.5*b[eof+2]; // cx=l+0.5*w
+				i++;break;
+			case 188: // wp top
+				b[eof+t]=e[--j]; // t=tos
+				b[eof+31]=b[eof+5]+b[eof+3]; // b=t+h
+				b[eof+33]=b[eof+5]+0.5*b[eof+3]; // cy=t+0.5*h
+				i++;break;
+			case 203:case 209:case 210:
+			case 211:case 212:case 213:case 214:case 215:case 216:case 217:case 219:
+			case 220:case 221:case 222:b[++i*45+(a[i-1]-203)]=e[--j];i++;break; // wpex
+			case 218:b[++i*45+15]=e[--j];b[i*45+45]=1;i++;break; // wpex srcTime
+			case 204: // wpex scale
+				b[++i*45+1]=e[--j]; // s=tos
+				b[i*45+2]=b[i*45+2]*b[i*45+1]; // w=w*scale
+				b[i*45+30]=b[i*45+4]+b[i*45+2]; // r=l+w
+				b[i*45+32]=b[i*45+4]+0.5*b[i*45+2]; // cx=l+0.5*w
+				b[i*45+3]=b[i*45+3]*b[i*45+1]; // h=h*scale
+				b[i*45+31]=b[i*45+5]+b[i*45+3]; // b=t+h
+				b[i*45+33]=b[i*45+5]+0.5*b[i*45+3]; // cy=t+0.5*h
+				i++;break;
+			case 205: // wpex width
+				b[++i*45+2]=e[--j]*b[i*45+1]; // w=tos*scale
+				b[i*45+30]=b[i*45+4]+b[i*45+2]; // r=l+w
+				b[i*45+32]=b[i*45+4]+0.5*b[i*45+2]; // cx=l+0.5*w
+				i++;break;
+			case 206: // wpex height
+				b[++i*45+3]=e[--j]*b[i*45+1]; // h=tos*scale
+				b[i*45+31]=b[i*45+5]+b[i*45+3]; // b=t+h
+				b[i*45+33]=b[i*45+5]+0.5*b[i*45+3]; // cy=t+0.5*h
+				i++;break;
+			case 207: // wpex left
+				b[++i*45+4]=e[--j]; // l=tos
+				b[i*45+30]=b[i*45+4]+b[i*45+2]; // r=l+w
+				b[i*45+32]=b[i*45+4]+0.5*b[i*45+2]; // cx=l+0.5*w
+				i++;break;
+			case 208: // wpex top
+				b[++i*45+t]=e[--j]; // t=tos
+				b[i*45+31]=b[i*45+5]+b[i*45+3]; // b=t+h
+				b[i*45+33]=b[i*45+5]+0.5*b[i*45+3]; // cy=t+0.5*h
+				i++;break;
+			case 223: // intrvlStrt (if t1<t<t2, +4, else jmp [+3])
+				// aka if[+1]<t<[+2]then+4else[+3]
+				if(b2[i+1]<b[eof]&&b[eof]<b2[i+2])i+=4;else i=a[i+3];break;
+			case 224: // tlStrt,cnt,n*[dur,jmpOvIdx,intrr...]
+				let cnt=a[i+1],stT=0;i+=2;
+				while(cnt>0){
+					const t=b[eof];
+					if(stT<t&&t<b2[a[i]]){t+=2;break;}
+					else cnt--,stT+=b2[a[i]],i=a[i+2];
+				}break;
+			case 225: // pgStrt (if pg in range, jmp to [+pg] else jmp over)
+				const pg=b[eof+18];
+				if(pg>=0&&pg<=a[i+1])i=a[i+3+pg];
+				else i=a[i+2];break;
+			case 226: if(e[--j])i=a[i+1];else i+=2;break; // chk/cnd jmp
+			case 227: i=a[i+1];break; // uncnd jmp
+			case 228: break lp; // endScr
+		}
+	}
+	let eo=d[l-1]*45,po=b[eo+35]*45,pUPx=ru;
+	b[eo+36]=b[eo+2]*pUPx; // wPx=w*pUPx
+	b[eo+37]=b[eo+3]*pUPx; // hPx=h*pUPx
+	b[eo+38]=Math.min(b[eo+36],b[eo+37]); // uPx=min(wPx,hPx)
+	b[eo+39]=rcx+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
+	b[eo+40]=rcy+b[eo+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
+	b[eo+41]=b[eo+39]+0.5*b[eo+36]; // cxPx=lPx+0.5WPx
+	b[eo+44]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
+	for(i=l-2;i>0;i--){
+		eo=d[i]*45,po=b[eo+35]*45,pUPx=b[po+38];
+		b[eo+36]=b[eo+2]*pUPx; // wPx=w*pUPx
+		b[eo+37]=b[eo+3]*pUPx; // hPx=h*pUPx
+		b[eo+38]=Math.min(b[eo+36],b[eo+37]); // uPx=min(wPx,hPx)
+		b[eo+39]=b[eo+41]+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
+		b[eo+40]=b[eo+42]+b[e+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
+		b[eo+41]=b[eo+39]+0.5*b[eo+36]; // cxPx=lPx+0.5WPx
+		b[eo+44]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
+	}
+	ctx.save();
+	for(i=l-1;i>=0;i--){
+		eo=d[i]*45,po=b[eo+35]*45;
+		while(k>0&&b[eo+35]!==c[k-1])ctx.restore(),k--;
+		ctx.beginPath(); ctx.rect(b[eo+39],b[eo+40],b[eo+36],b[eo+37]); ctx.clip();
+		if(b[eo+13]!==0){
+			ctx.translate(b[eo+41],b[eo+42]);
+			ctx.rotate(b[eo+39]);
+			ctx.translate(-b[eo+41],-b[eo+42]);
+		}
+		// basically u'd need multiple restores depending on much uve dropped in stk,
+		// like to balance them
+		// maybe something like, while not parent, keep restoring?
+		if(b[eo+12]<1)ctx.globalAlpha*=b[eo+12];
+		ctx.save(); c[k++]=d[i];
+		const s=b[eo+8],sRdy=eles[s]==null?reqSrc(s):true;
+		if(sRdy){
+			switch(srcTs[s]){
+				case 0: // img
+					ctx.drawImage(eles[s],b[eo+39],b[eo+40],b[eo+36],b[eo+37]);
+					break;
+				case 1: // txt
+					const str='In the heart of the bustling city...'; // debug
+					const fPx=b[eo+14]*b[eo+38],wPx=b[eo+36]; // fPx=fs*uPx
+					ctx.font=`${fPx}px monospace`;
+					ctx.fillStyle=`rgb(${b[eo+9]*256},${b[eo+10]*256},${bl=b[eo+11]*256})`;
+					const sCh=Math.floor(b[eo+6])
+					const eCh=Math.floor(b[eo+7]);
+					const lw=Math.max(1,Math.floor(wPx/(fPx/1.6664)));
+					if(!strCache.has(d[i]))strCache.set(d[i],[0,0,0,0,null]);
+					const cur=strCache.get(d[i]);
+					if(cur[0]!==s||cur[1]!==sCh||cur[2]!==eCh||cur[3]!==lw){
+						cur[4]=split(str,lw); // inline later
+						cur[0]=s; cur[1]=sCh; cur[2]=eCh; cur[3]=lw;
+					}
+					const lns=cur[4];
+					let top=0;
+					for(let l=0;l<lns.length;l++){
+						ctx.fillText(lns[l],b[eo+39],b[eo+40]+top);
+						top+=fPx;
+					}
+					break;
+				case 2: // snd
+					const aky=(s<<8)|d[i];
+					const aud=oMed.get(aky)||new Audio(eles[s]);
+					if(aud.paused===true){
+						if(aud.readyState===4){
+							aud.currentTime=b[eo+15],aud.playbackRate=b[eo+16];
+							aud.volume=b[eo+17],aud.play();
+						}
+					}else{
+						if(b[eo+45])b[eo+45]=0,aud.currentTime=b[eo+15];
+						if(aud.playbackRate!==b[eo+16])aud.playbackRate=b[eo+16];
+						if(aud.volume!==b[eo+17])aud.volume=b[eo+17];
+					}
+					oMed.delete(aky),nMed.set(aky,aud);
+					break;
+				case 3: // vid
+					const vky=(s<<8)|d[i];
+					const vid=oMed.get(vky)||new Video(eles[s]);
+					if(vid.paused===true){
+						if(vid.readyState===4){
+							vid.currentTime=b[eo+15],vid.playbackRate=b[eo+16];
+							vid.volume=b[e+17],vid.play();
+						}
+					}else{
+						if(b[eo+45])b[eo+45]=0,vid.currentTime=b[eo+15];
+						if(vid.playbackRate!==b[eo+16])vid.playbackRate=b[eo+16];
+						if(vid.volume!==b[eo+17])vid.volume=b[eo+17];
+					}
+					oMed.delete(vky),nMed.set(vky,vid);
+					ctx.drawImage(vid,b[eo+39],b[eo+40],b[eo+36],b[eo+37]);
+					break;
+				case 4: // src
+			}
+		}else{
+			ctx.fillStyle=`rgb(${b[eo+9]*256},${b[eo+10]*256},${bl=b[eo+11]*256})`;
+			ctx.fillRect(b[eo+39],b[eo+40],b[eo+36],b[eo+37]);
+		}
+	}
+	while(k>0)ctx.restore(),k--;
+	ctx.restore();
+	const tempMed=oMed; oMed=nMed;
+	for(let[v]of tempMed)v.pause();
+	tempMed.clear(); nMed=tempMed;
+	oSet.set(nSet.subarray(0,oCnt)); nSet.fill(0,0,oCnt);
+	animId=requestAnimationFrame(read);
+}
+// 3.1: splits monospace str into multiline
+const split=(str,lw)=>{
+	// tested and working perfectly
+	const sts=[],ens=[],len=str.length;
+	let ln=0,cSt=0;
+	for(let i=0;i<len;i++){
+		if(str[i]==='\n'||i===len-1){
+			sts[ln]=cSt; ens[ln]=i+1; ln++; cSt=i+1; continue;
+		}
+		if(i===cSt+lw-1){
+			if(str[i]!==' '&&str[i+1]!==' '){ // on a word so trouble
+				const initial=i;
+				while(str[i]!==' '&&i>cSt)i--;
+				const nxLnSt=i+1;
+				while(str[i]===' '&&i>cSt)i--; // goto first char after gap
+				if(i===cSt){ // if whole line a word then split
+					sts[ln]=cSt; ens[ln]=initial; ln++; i=initial;
+				}else{
+					sts[ln]=cSt; ens[ln]=i+1; ln++;
+					cSt=nxLnSt;
+				}
+			}else{ // on a gap, so fine
+				const initial=i;
+				while(str[i]===' '&&i>cSt)i--;
+				sts[ln]=cSt; ens[ln]=i+1; ln++;
+				i=initial; i++;
+				while(str[i]===' '&&i<len)i++;
+				cSt=i;
+			}
+		}
+	}
+	const result=new Array(ln);
+	for (i=0;i<ln;i++)result[i]=str.slice(sts[i],ens[i]);
+	return result;
+};
+// --- section 4: source file storage/access ---
+// 4.0: fills eleCache with either [bmp, str, objUrl] and rets true if avaiable
+const reqSrc=(idx)=>{
+	const sk=srcs[idx],t=srcTs[idx];
+	if(!fileCache[sk])return false;
+	const file=fileCache[sk];
+	const ele=eleCache.get(file)[t];
+	if(ele===null)return false; // still loading
+	else if(ele){eles[idx]=ele;return true;}
+	else{
+		eleCache.get(file)[t]=null;
+		switch(t){
+			case 0: 
+				createImageBitmap(file).then(b=>eleCache.get(file)[0]=b);
+				return false;
+			case 1:
+				const txtReader=new FileReader(); 
+				txtReader.onload=()=>eleCache.get(file)[1]=txtReader.result;
+				txtReader.readAsText(file); return false;
+			case 2:case 3:
+				const ele=URL.createObjectURL(file);
+				eleCache.get(file)[t]=ele; eles[idx]=ele; return true;
+			case 4:
+				return false;
+		}
+		
+	}
+};
+// 4.1: uploads files to local mem (fileCache)
+const locUpld=()=>{
+	// why does this sometimes take two tries after page reload?
+	const hdlChange=async(e)=>{
+		const files=Array.from(e.target.files);
+		cOut(`${files.length} files submitted`);
+		for (let i=0;i<files.length;i++) {
+			const file=files[i];
+			const arrayBuffer=await file.arrayBuffer();
+			const key1=file.name;
+			const key2=await sha256Base64(arrayBuffer);
+			const key3=await sha256Base64k(arrayBuffer);
+			eleCache.set(file,[null,null,null]);
+			fileCache[key1]=file;
+			fileCache[key2]=file;
+			fileCache[key3]=file;
+			cOut(`${i + 1}`);
+			cOut(`${key1}`);
+			cOut(`${(file.size / 1000).toFixed(1)}kB`);
+			cOut(`${key2}`);
+			cOut(`${key3}`);
+		}
+	};
+	cOut('Uploading local files');
+	const inp=document.createElement('input');
+	inp.type='file';
+	inp.multiple=true;
+	inp.addEventListener('change', hdlChange);
+	inp.style.display='none';
+	document.body.appendChild(inp); // this might prevent bug where sometimes doesnt fire
+	inp.click();
+};
+// 4.2: dls from ipfs link, to fileCache
+const ipfsDl=async(CID)=>{
+	if(!fileCache[CID]) {
+		try{
+			const resp=await fetch(`http://www.a.com/ipfs/${CID}`);
+			if (resp.ok){
+				const blob=await resp.blob();
+				const file=new File([blob],CID);
+				eleCache.set(file,[null,null,null]);
+				fileCache[CID]=file;
+				cOut(`Downloaded CID: ${CID}`);
+				cOut(`${(file.size / 1000).toFixed(1)}kB`);
+			}else{
+				cOut(`Unable to fetch CID: ${CID}`);
+			}
+		} catch(error){
+			cOut(`Unable to fetch CID: ${CID}`);
+		}
+	}
+};
+// 4.3: base64 sha256 hash
+const sha256Base64=async(arrayBuffer)=>{
+	const typedArr=new Uint8Array(await crypto.subtle.digest('SHA-256', arrayBuffer));
+	const chArr=new Array(32);
+	for (let i=0;i<typedArr.length;i++)chArr[i]=String.fromCharCode(typedArr[i]);
+	return btoa(chArr.join('')).slice(0, -1);
+};
+// 4.4: base64k sha256 hash
+const sha256Base64k=async(arrayBuffer)=>{
+	const typedArr=new Uint16Array(await crypto.subtle.digest('SHA-256', arrayBuffer));
+	const chArr=new Array(16);
+	for (let i=0;i<16;i++)chArr[i]=String.fromCodePoint(0xF0000+typedArr[i]);
+	return chArr.join('');
+};
+// --- section 5: console ---
+// 5.0: writes to console
+const cOut=(str,frUser=false)=>{
+	const span=document.createElement('span');
+	if(frUser)span.appendChild(document.createTextNode('> '+str));
+	else span.appendChild(document.createTextNode(str));
+	if(!frUser){
+		span.className='consoleLn';
+		span.onmousedown=()=>{
+			if(!span.style.animation){  //  checks for both null and empty string
+				span.style.color='navy';
+				navigator.clipboard.writeText(str);
+				span.style.animation='colorFade 0.9s ease-in-out forwards';
+				setTimeout(()=>{
+					span.style.animation=null;
+					span.style.color=null;
+				}, 800);
+			}
+		};
+	}
+	consoleDiv.appendChild(span);
+	consoleDiv.scrollTop = consoleDiv.scrollHeight;
+};
+// 5.1: maintains '>' start char on input
+const consInpInp=e=>{
+	let v=e.target.value;
+	if(v[0]!='>')e.target.value='>'+v
+};
+// 5.2: handles enter key
+const consInpKd=e=>{
+  if(e.key==='Enter'){
+		const str=e.target.value.trim();
+		cOut(str,true); consCmd(str);
+		e.target.value = ''; // can this b null and save a str
+	}
+};
+// 5.3: parses cmds
+const consCmd=(str)=>{
+
+	const cmds={
+		'UPL':(args)=>locUpld(),
+		'CC':(args)=>consTxtDiv.innerHTML= '', // finish cc() and call it instead
+		'DON':(args)=>{cOut('drawOn');read();},
+		'>DOFF':(args)=>{cOut('drawOff');cancelAnimationFrame(animId);},
+		'EXPTXT':(args)=>expTxtFile(),
+		'IMPTXT':(args)=>impTxtFile(),
+		'FS':(args)=>document.body.requestFullscreen(),
+		'DFS':(args)=>canv.requestFullscreen(),
+		'SS':(args)=>ss(),
+		// add a ss/setspeed=> gs=arg1 (min 0.0001 max 1000 or something)
+	}
+	const parts=str.trim().split(/\s+/);
+	const ac=parts[0].toUpperCase();
+	const args=parts.slice(1);
+	if (cmds[ac]){
+		cmds[ac](args);
+	}else{
+		cOut('Invalid command');
+	}
+};
+// ---section 6: misc ---
+const expTxtFile=()=>{
+	// ofc when we have spec export code frmt we want an option for that too
+	// and binary vers ofc, with optional .scr
+	const blob=new Blob([codeWriter.value],{type:'text/plain'});
+	const url=URL.createObjectURL(blob);
+	const a=document.createElement('a');
+	a.href=url;
+	a.download='script.txt'; // should def to sha256 hash...
+	document.body.appendChild(a);
+	a.click();
+	window.URL.revokeObjectURL(url);
+	document.body.removeChild(a);
+};
+const impTxtFile=()=>{
+	const input=document.createElement('input');
+	input.type='file';
+	input.accept='.txt';
+	input.onchange=async function() {
+		const file=input.files[0];
+		const reader=new FileReader();
+		reader.onload=function() {
+			const scrStr=reader.result;
+			codeWriter.value=scrStr; buildVM();
+		};
+		reader.readAsText(file);
+	};
+	input.click();
+};
+const ss=(fileType='jpeg')=>{
+	// obv this should have arbitrary dims at some point
+	// as could easily temporary change dims and redraw without a recompile
+	// could also snap by eo lbl...
+	const url=canv.toDataURL('image/'+fileType);
+	const a=document.createElement('a');
+	a.href=url; a.download='ss.'+fileType;
+	document.body.appendChild(a); a.click();
+	document.body.removeChild(a);
+};
+const cc=()=>{
+	// stands for 'clear cache' but should clear everything it can
+	// then cOut 'all caches cleared, including console'
+	// XYZ B/KB/MB cleared
+	// just give a total number
+	// have it accessible as console command 'CC'
+	fileCache.clear();
+	// have to think through logic but prob involve emptying eleCache,
+	// eles, and everything, perhaps with new VM build (or perhaps not)
+};
+
+
+
+
+
+
+
+
+</script>
