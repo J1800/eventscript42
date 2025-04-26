@@ -228,9 +228,15 @@ const onLoad=()=>{
 	refresh(null); window.addEventListener('resize',refresh);
 	document.addEventListener("keydown",e=>kh[e.key.charCodeAt(0)-97]=1);
 	document.addEventListener("keyup",e=>kh[e.key.charCodeAt(0)-97]=0);
-	window.addEventListener("deviceorientation",e=>{pitch=e.beta;roll=e.gamma;yaw=e.alpha;});
-	if(typeof DeviceOrientationEvent.requestPermission==='function')
-	DeviceOrientationEvent.requestPermission();
+	window.addEventListener("deviceorientation",e=>pitch=e.beta,roll=e.gamma,yaw=e.alpha);
+	const requestPermission=()=>{
+		if(typeof DeviceOrientationEvent.requestPermission==='function')
+			DeviceOrientationEvent.requestPermission();
+		window.removeEventListener('touchstart',requestPermission);
+		window.removeEventListener('click',requestPermission);
+	}
+	window.addEventListener('touchstart',requestPermission);
+	window.addEventListener('click',requestPermission);
 	cOut('Welcome to the EventScript prototype. At some point, typing HELP will load a manual');
 	buildVM(); animId=requestAnimationFrame(read);
 	document.body.style.pointerEvents='auto';
