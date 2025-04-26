@@ -228,15 +228,9 @@ const onLoad=()=>{
 	refresh(null); window.addEventListener('resize',refresh);
 	document.addEventListener("keydown",e=>kh[e.key.charCodeAt(0)-97]=1);
 	document.addEventListener("keyup",e=>kh[e.key.charCodeAt(0)-97]=0);
-	window.addEventListener("deviceorientation",e=>pitch=e.beta,roll=e.gamma,yaw=e.alpha);
-	const requestPermission=()=>{
-		if(typeof DeviceOrientationEvent.requestPermission==='function')
-			DeviceOrientationEvent.requestPermission();
-		window.removeEventListener('touchstart',requestPermission);
-		window.removeEventListener('click',requestPermission);
-	}
-	window.addEventListener('touchstart',requestPermission);
-	window.addEventListener('click',requestPermission);
+	window.addEventListener("deviceorientation",e=>{
+		pitch=e.beta||0;roll=e.gamma||0;yaw=e.alpha||0
+	});
 	cOut('Welcome to the EventScript prototype. At some point, typing HELP will load a manual');
 	buildVM(); animId=requestAnimationFrame(read);
 	document.body.style.pointerEvents='auto';
@@ -957,17 +951,24 @@ const consInpKd=e=>{
 };
 // 5.3: parses cmds
 const consCmd=(str)=>{
-
 	const cmds={
-		'UPL':(args)=>locUpld(),
-		'CC':(args)=>consTxtDiv.innerHTML= '', // finish cc() and call it instead
-		'DON':(args)=>{cOut('drawOn');read();},
+		'>UPL':(args)=>locUpld(),
+		'>CC':(args)=>consTxtDiv.innerHTML= '', // finish cc() and call it instead
+		'>DON':(args)=>{cOut('drawOn');read();},
 		'>DOFF':(args)=>{cOut('drawOff');cancelAnimationFrame(animId);},
-		'EXPTXT':(args)=>expTxtFile(),
-		'IMPTXT':(args)=>impTxtFile(),
-		'FS':(args)=>document.body.requestFullscreen(),
-		'DFS':(args)=>canv.requestFullscreen(),
-		'SS':(args)=>ss(),
+		'>EXPTXT':(args)=>expTxtFile(),
+		'>IMPTXT':(args)=>impTxtFile(),
+		'>FS':(args)=>document.body.requestFullscreen(),
+		'>DFS':(args)=>canv.requestFullscreen(),
+		'>SS':(args)=>ss(),
+		'>REQ':(args)=>{
+			if(typeof DeviceOrientationEvent.requestPermission!=='function')
+				cOut('device orientation permission request not supported')
+			else
+			DeviceOrientationEvent.requestPermission().then(r=>{
+				cOut(r==='granted'?'permission granted':'permission denied')
+			})
+		}
 		// add a ss/setspeed=> gs=arg1 (min 0.0001 max 1000 or something)
 	}
 	const parts=str.trim().split(/\s+/);
