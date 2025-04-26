@@ -1,6 +1,6 @@
 self.addEventListener('install',e=>{
     e.waitUntil(
-        caches.open('offline-v3').then(c=>c.add('eventscript42.html'))
+        caches.open('offline-v4').then(c=>c.add('eventscript42.html'))
     )
 })
 self.addEventListener('fetch',e=>{
