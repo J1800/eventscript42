@@ -50,7 +50,11 @@
 <canvas id="canv" onmousedown="canvOXY(event)" onwheel="canvOS(event)"></canvas>
 <div id="workspace">
 	<div id="slider" onmousedown="slide(event)" ontouchstart="slide(event)"></div>
-	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)"></textarea>
+	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)">scale 0.1
+top 0.3
+left
+	-0.1
+	left+tilt/1000</textarea>
 	<div id="consoleDiv"></div>
 	<input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" onkeydown="consInpKd(event)" oninput="consInpInp(event)" value=">">
 </div>
@@ -229,7 +233,6 @@ const onLoad=()=>{
 	buildVM(); animId=requestAnimationFrame(read);
 	document.body.style.pointerEvents='auto';
 	if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js')
-
 };
 // 1.4: drag on canv to edit pos offset
 const canvOXY=(e)=>{
@@ -388,7 +391,7 @@ const fltn=(arr,oNum)=>{
 					}
 				}
 		}
-		while(x>xs)a[c[x--]]=z;break;
+		while(x>xs)a[c[x--]]=z;
 	}
 }
 // 2.4: spec flatten, used by 2.3
@@ -581,9 +584,9 @@ const read=()=>{
 			case 173: // mouse-h
 			case 174: // mouse-u
 			case 175: // mouse-d
-			case 176: // pitch
-			case 177: // roll
-			case 178: // yaw
+			case 176:e[j++]=pitch;i++;break;
+			case 177:e[j++]=roll;i++;break;
+			case 178:e[j++]=yaw;i++;break;
 			case 179: // nw want same as sRdy in the crunch..
 			case 180: // nh
 			case 181: c[k++]=a[++i];eof=45*a[i++];break;    // eoSt
@@ -617,7 +620,7 @@ const read=()=>{
 				b[eof+32]=b[eof+4]+0.5*b[eof+2]; // cx=l+0.5*w
 				i++;break;
 			case 188: // wp top
-				b[eof+t]=e[--j]; // t=tos
+				b[eof+5]=e[--j]; // t=tos
 				b[eof+31]=b[eof+5]+b[eof+3]; // b=t+h
 				b[eof+33]=b[eof+5]+0.5*b[eof+3]; // cy=t+0.5*h
 				i++;break;
