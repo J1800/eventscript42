@@ -11,7 +11,7 @@
 	<meta charset="UTF-8">
 	<style>
 		html,body{--o:1;--r:60;overscroll-behavior:none}
-		body{background-color:black;margin:0;pointer-events:none;-webkit-user-select:none;user-select:none}
+		body{background-color:black;cursor:default;margin:0;pointer-events:none;-webkit-user-select:none;user-select:none}
 		#canv{position:fixed;will-change:height,left,top,width}
 		@media(orientation:landscape){
 			body{--d:to right}
@@ -43,18 +43,14 @@
 		#consInp{background-color:navy;border:2px solid #576dba;border-radius:0;bottom:16px;color:#576dba;font-size:12px;opacity:var(--o);outline:none;position:absolute;right:16px;
 			top:calc(100% - 32px);will-change:background,height,left,top,width}
 		@keyframes colorFade{0%{background-color:#1e7a00}100%{background-color:#6b7dc6}}
-		#colorTestDiv{width:0;height:0}
+		#colorTestDiv{color:white;height:0;width:0}
 	</style>
 </head>
 <body onload="onLoad()">
 <canvas id="canv" onmousedown="canvOXY(event)" onwheel="canvOS(event)"></canvas>
 <div id="workspace">
 	<div id="slider" onmousedown="slide(event)" ontouchstart="slide(event)"></div>
-	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)">scale 0.1
-top 0.3
-left
-	-0.1
-	left+roll/1000</textarea>
+	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)"></textarea>
 	<div id="consoleDiv"></div>
 	<input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" onkeydown="consInpKd(event)" oninput="consInpInp(event)" value=">">
 </div>
@@ -118,6 +114,7 @@ cat 2 (starts)
 	226: cond jmp (stkPop 1 jmp to [+1] else +2, used for chks)
 	227: uncond jmp to [+1]
 	228: endScr
+	229: direct color write (i+1/2/3)
 */
 // --- section 0: gbls ---
 // 0.0: glbs for building scr vm
@@ -153,7 +150,8 @@ const srcs=[]; // arr of strings (src keys)
 const srcTs=new Uint8Array(512); // 0-4, img, sound etc
 // 0.2: glbs used for read()
 const ctx=canv.getContext("2d",{alpha:false});
-let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=100,gt=0,gs=1,pgT=performance.now();
+let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=1,gt=0,gs=1,pgT=performance.now();
+let pd=window.devicePixelRatio;
 const kh=new Uint8Array(26); // keys currently held on that frame
 const kd=new Uint8Array(26); // keys pressed down on that frame
 const ku=new Uint8Array(26); // keys released on that frame
@@ -225,6 +223,7 @@ const refresh=(e)=>{
 };
 // 1.3: page onLoad
 const onLoad=()=>{
+	canv.addEventListener('touchstart',canvTch,{passive:false}); // tch evnt so tag/sj
 	refresh(null); window.addEventListener('resize',refresh);
 	document.addEventListener("keydown",e=>kh[e.key.charCodeAt(0)-97]=1);
 	document.addEventListener("keyup",e=>kh[e.key.charCodeAt(0)-97]=0);
@@ -253,12 +252,42 @@ const canvOXY=(e)=>{
 // 1.5: mousewheel/pinch canv to edit offset scale
 const canvOS=(e)=>{
 	e.preventDefault(); const dPc=0.001*os*-e.deltaY;
-	os=Math.min(100,Math.max(0.01,os+dPc));
+	os=Math.min(1000,Math.max(0.001,os+dPc));
 };
+// pinch to scale
+const canvTch=(e)=>{
+	e.preventDefault();
+	if(e.touches.length===2){
+		const intlX=e.touches[0].clientX-e.touches[1].clientX;
+		const intlY=e.touches[0].clientY-e.touches[1].clientY;
+		let lastDist=Math.hypot(intlX,intlY);
+		const move=(e)=>{
+			e.preventDefault();
+			if(e.touches.length!==2)return
+			const curX=e.touches[0].clientX-e.touches[1].clientX;
+			const curY=e.touches[0].clientY-e.touches[1].clientY;
+			const dist=Math.hypot(curX,intlY);
+			const dPc=0.005*os*(dist-lastDist);
+			os=Math.min(1000,Math.max(0.001,os+dPc));
+			lastDist=dist;
+		};
+		const end=()=>{
+			canv.removeEventListener('touchmove',move);
+			canv.removeEventListener('touchend',end);
+		};
+		canv.addEventListener('touchmove',move,{passive:false});
+		canv.addEventListener('touchend',end,{passive:false});
+	}
+};
+
+
+
+
+
 // --- section 2: building vm from scr string ---
 // 2.0: buildVM, usually called on codeWrite key input
 const buildVM=()=>{
-	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=100,em.clear(),strCache.clear();
+	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=1,em.clear(),strCache.clear();
 	srcs.length=0,eles.length=0,strArr.fill(undefined);
 	for(let[v]of oMed)v.pause(); oMed.clear();
 	z=0,x=0,y2=0,gt=0;
@@ -304,7 +333,8 @@ const emO=(o,eoNum)=>{
 			o[0]=4; for(let i=0;i<o[1].length;i++)
 				for(let j=0;j<o[1][i][1].length;j++)emO(o[1][i][1][j],eoNum);
 			break;
-		case(o[0]==='sources'): o[0]=6; break;
+		case(o[0]==='sources'): 
+			o[0]=6; for(let i=0;i<o[1].length;i++)emO(o[1][i],eoNum); break;
 		case(o[0]==='images'): o[0]=7; break;
 		case(o[0]==='texts'): o[0]=8; break;
 		case(o[0]==='sounds'): o[0]=9; break;
@@ -324,7 +354,7 @@ const emO=(o,eoNum)=>{
 			if(si>-1)[tar,onSt]=[o[0].slice(0,si),o[0].slice(si+1)];
 			else onSt=o[1][0]?.[0]||null,tar=o[0];
 			o[0]=1; o[1]=tar;o[2]=onSt;o[3]=onDrw;o[4]=eoNum;break; 
-		case(/^\#[a-z][a-z0-9]*$/.test(o[0])):
+		case(/^\#[a-z0-9]+$/i.test(o[0])):
 			const nxEoNum=eoCnt++; em.set(o[0],nxEoNum);
 			for(let i=0;i<o[1].length;i++)emO(o[1][i],nxEoNum);
 			o[0]=0; o[2]=nxEoNum; 
@@ -382,13 +412,13 @@ const fltn=(arr,oNum)=>{
 				fltn(o[1],oCnt++); a[jmpO]=z; break;
 			case 6: // srcs
 				for(let j=0;j<o[1].length;j++){
-					const so=o[1][j],ty=so[0]>6?so[0]-7:0;
+					const so=o[1][j],ty=so[0]>6?so[0]:0;
 					if(ty){
 						for(let k=0;k<so[1].length;k++){
 							const srcIdx=srcs.length;
 							srcs[srcIdx]=so[1][k][0];
 							eles[srcIdx]=null;
-							srcTs[srcIdx]=ty;
+							srcTs[srcIdx]=ty-7;
 						}
 					}
 				}
@@ -399,8 +429,20 @@ const fltn=(arr,oNum)=>{
 // 2.4: spec flatten, used by 2.3
 const fltnProp=(o,start)=>{
 	if(!o[start?2:3])return;
-	const tar=o[1],expr=o[start?2:3],wInstr=pm[tar],eoNum=o[4];
-	if(wInstr<20)if(buildPF(expr)){a[z++]=183+wInstr;return;}
+	const tar=o[1],expr=o[start?2:3],eoNum=o[4];
+	if(tar==='color'){
+		colorTestDiv.style.color=expr;
+		const m=/\d+/g;
+		const rgb=getComputedStyle(colorTestDiv).color;
+		m.lastIndex=0; // only actually ncessary once regexes moved outside...
+		a[z++]=229;
+		a[z++]=+m.exec(rgb)[0];
+		a[z++]=+m.exec(rgb)[0];
+		a[z++]=+m.exec(rgb)[0];
+		colorTestDiv.style.color=null;
+		return;
+	}
+	if(pm[tar]<20)if(buildPF(expr)){a[z++]=183+pm[tar];return;}
 	let relO=-1;
 	for(let j=eoNum*10;j<eoNum*10+10;j++){
 		if(strArr[j]===tar){relO=j-eoNum*10;break;}
@@ -594,9 +636,9 @@ const read=()=>{
 			case 181: c[k++]=a[++i];eof=45*a[i++];break;    // eoSt
 			case 182: d[l++]=c[--k]; // eo end
 			case 183:case 189:case 190:case 191:case 192:case 193:case 194:case 195:
-			case 196:case 198:case 199:case 200:case 201:case 202:
+			case 196:case 197:case 199:case 200:case 201:case 202:
 			b[eof+(a[i]-183)]=e[--j];i++;break; // wp general case
-			case 197:b[eof+15]=e[--j];b[eof+45]=1;i++;break; // wp srcTime
+			case 198:b[eof+15]=e[--j];b[eof+45]=1;i++;break; // wp srcTime
 			case 184: // wp scale
 				b[eof+1]=e[--j]; // s=tos
 				b[eof+2]=b[eof+2]*b[eof+1]; // w=w*scale
@@ -676,25 +718,26 @@ const read=()=>{
 			case 226: if(e[--j])i=a[i+1];else i+=2;break; // chk/cnd jmp
 			case 227: i=a[i+1];break; // uncnd jmp
 			case 228: break lp; // endScr
+			case 229: b[eof+9]=a[++i];b[eof+10]=a[++i];b[eof+11]=a[++i];i++;break;
 		}
 	}
-	let eo=d[l-1]*45,po=b[eo+35]*45,pUPx=ru;
+	let eo=d[l-1]*45,po=b[eo+35]*45,pUPx=ru*os;
 	b[eo+36]=b[eo+2]*pUPx; // wPx=w*pUPx
 	b[eo+37]=b[eo+3]*pUPx; // hPx=h*pUPx
 	b[eo+38]=Math.min(b[eo+36],b[eo+37]); // uPx=min(wPx,hPx)
-	b[eo+39]=rcx+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
-	b[eo+40]=rcy+b[eo+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
+	b[eo+39]=rcx+ox*pd+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
+	b[eo+40]=rcy+oy*pd+b[eo+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
 	b[eo+41]=b[eo+39]+0.5*b[eo+36]; // cxPx=lPx+0.5WPx
-	b[eo+44]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
-	for(i=l-2;i>0;i--){
+	b[eo+42]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
+	for(i=l-2;i>=0;i--){
 		eo=d[i]*45,po=b[eo+35]*45,pUPx=b[po+38];
 		b[eo+36]=b[eo+2]*pUPx; // wPx=w*pUPx
 		b[eo+37]=b[eo+3]*pUPx; // hPx=h*pUPx
 		b[eo+38]=Math.min(b[eo+36],b[eo+37]); // uPx=min(wPx,hPx)
-		b[eo+39]=b[eo+41]+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
-		b[eo+40]=b[eo+42]+b[e+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
+		b[eo+39]=b[po+41]+b[eo+4]*pUPx; // lPx=xOrgnPx+left*pUPx;
+		b[eo+40]=b[po+42]+b[eo+5]*pUPx; // tPx=yOrgnPx+top*pUPx;
 		b[eo+41]=b[eo+39]+0.5*b[eo+36]; // cxPx=lPx+0.5WPx
-		b[eo+44]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
+		b[eo+42]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
 	}
 	ctx.save();
 	for(i=l-1;i>=0;i--){
@@ -706,9 +749,6 @@ const read=()=>{
 			ctx.rotate(b[eo+39]);
 			ctx.translate(-b[eo+41],-b[eo+42]);
 		}
-		// basically u'd need multiple restores depending on much uve dropped in stk,
-		// like to balance them
-		// maybe something like, while not parent, keep restoring?
 		if(b[eo+12]<1)ctx.globalAlpha*=b[eo+12];
 		ctx.save(); c[k++]=d[i];
 		const s=b[eo+8],sRdy=eles[s]==null?reqSrc(s):true;
@@ -718,7 +758,7 @@ const read=()=>{
 					ctx.drawImage(eles[s],b[eo+39],b[eo+40],b[eo+36],b[eo+37]);
 					break;
 				case 1: // txt
-					const str='In the heart of the bustling city...'; // debug
+					const str=eles[s];
 					const fPx=b[eo+14]*b[eo+38],wPx=b[eo+36]; // fPx=fs*uPx
 					ctx.font=`${fPx}px monospace`;
 					ctx.fillStyle=`rgb(${b[eo+9]*256},${b[eo+10]*256},${bl=b[eo+11]*256})`;
@@ -823,6 +863,11 @@ const split=(str,lw)=>{
 // 4.0: fills eleCache with either [bmp, str, objUrl] and rets true if avaiable
 const reqSrc=(idx)=>{
 	const sk=srcs[idx],t=srcTs[idx];
+	if(t===1&&sk[0]==="'"&&sk[sk.length-1]==="'"&&sk.length>1){
+		const sk2=sk.slice(1,-1);
+		eles[idx]=sk2;
+		return true;
+	}
 	if(!fileCache[sk])return false;
 	const file=fileCache[sk];
 	const ele=eleCache.get(file)[t];
@@ -835,12 +880,13 @@ const reqSrc=(idx)=>{
 				createImageBitmap(file).then(b=>eleCache.get(file)[0]=b);
 				return false;
 			case 1:
-				const txtReader=new FileReader(); 
+				const txtReader=new FileReader();
 				txtReader.onload=()=>eleCache.get(file)[1]=txtReader.result;
-				txtReader.readAsText(file); return false;
+				txtReader.readAsText(file);
+				return false;	    
 			case 2:case 3:
 				const ele=URL.createObjectURL(file);
-				eleCache.get(file)[t]=ele; eles[idx]=ele; return true;
+				eleCache.get(file)[2]=ele; eles[idx]=ele; return true;
 			case 4:
 				return false;
 		}
@@ -859,7 +905,7 @@ const locUpld=()=>{
 			const key1=file.name;
 			const key2=await sha256Base64(arrayBuffer);
 			const key3=await sha256Base64k(arrayBuffer);
-			eleCache.set(file,[null,null,null]);
+			eleCache.set(file,new Array(3));
 			fileCache[key1]=file;
 			fileCache[key2]=file;
 			fileCache[key3]=file;
@@ -887,7 +933,7 @@ const ipfsDl=async(CID)=>{
 			if (resp.ok){
 				const blob=await resp.blob();
 				const file=new File([blob],CID);
-				eleCache.set(file,[null,null,null]);
+				eleCache.set(file,new Array(3));
 				fileCache[CID]=file;
 				cOut(`Downloaded CID: ${CID}`);
 				cOut(`${(file.size / 1000).toFixed(1)}kB`);

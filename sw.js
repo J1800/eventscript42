@@ -1,4 +1,4 @@
-const CACHE_NAME='offline-v6'
+const CACHE_NAME='offline-v7'
 const CACHE_FILE='eventscript42.html'
 
 self.addEventListener('install',e=>{
