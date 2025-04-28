@@ -260,16 +260,27 @@ const canvTch=(e)=>{
 	if(e.touches.length===2){
 		const intlX=e.touches[0].clientX-e.touches[1].clientX;
 		const intlY=e.touches[0].clientY-e.touches[1].clientY;
-		let lastDist=Math.hypot(intlX,intlY);
+		const intlDist=Math.hypot(intlX,intlY);
+		const intlOS=os;
 		const move=(e)=>{
 			e.preventDefault();
 			if(e.touches.length!==2)return
 			const curX=e.touches[0].clientX-e.touches[1].clientX;
 			const curY=e.touches[0].clientY-e.touches[1].clientY;
-			const dist=Math.hypot(curX,intlY);
-			const dPc=0.005*os*(dist-lastDist);
-			os=Math.min(1000,Math.max(0.001,os+dPc));
-			lastDist=dist;
+			const dist=Math.hypot(curX,curY);
+			os=Math.min(1000,Math.max(0.001,intlOS*dist/intlDist));
+		};
+		const end=()=>{
+			canv.removeEventListener('touchmove',move);
+			canv.removeEventListener('touchend',end);
+		};
+		canv.addEventListener('touchmove',move,{passive:false});
+		canv.addEventListener('touchend',end,{passive:false});
+	}else if(e.touches.length===1){
+		const ix=e.touches[0].clientX,iy=e.touches[0].clientY,iOX=ox,iOY=oy;
+		const move=(e)=>{
+			const dx=e.touches[0].clientX-ix,dy=e.touches[0].clientY-iy;
+			ox=iOX+dx,oy=iOY+dy;
 		};
 		const end=()=>{
 			canv.removeEventListener('touchmove',move);
@@ -279,6 +290,12 @@ const canvTch=(e)=>{
 		canv.addEventListener('touchend',end,{passive:false});
 	}
 };
+
+
+// lets think about pinch zoom, how to get it to match like scale...
+// well you'd want the initial dist, say is 100%, then u get
+// the new dist, as a perc of initial, and set the scale to that diff
+
 
 
 
