@@ -50,7 +50,33 @@
 <canvas id="canv" onmousedown="canvOXY(event)" onwheel="canvOS(event)"></canvas>
 <div id="workspace">
 	<div id="slider" onmousedown="slide(event)" ontouchstart="slide(event)"></div>
-	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)"></textarea>
+	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)">color darkblue
+width 1.2
+left -width/2
+opacity 1
+#box1
+	scale 0.4
+	left -0.4
+	top -0.4
+	height 1.9
+	opacity 1
+	color red
+	#box2
+		scale 0.3
+		left -0.3
+		top -0.8
+		color darkgreen
+		opacity 1
+		#text
+			opacity 1
+			scale 0.7
+			source 0
+			color black
+			fontSize 0.1
+sources
+	texts
+		'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation'
+</textarea>
 	<div id="consoleDiv"></div>
 	<input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" onkeydown="consInpKd(event)" oninput="consInpInp(event)" value=">">
 </div>
@@ -150,7 +176,7 @@ const srcs=[]; // arr of strings (src keys)
 const srcTs=new Uint8Array(512); // 0-4, img, sound etc
 // 0.2: glbs used for read()
 const ctx=canv.getContext("2d",{alpha:false});
-let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=1,gt=0,gs=1,gr=0,pgT=performance.now();
+let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=1,gt=0,gs=1,pgT=performance.now();
 let cy, cx;
 let pd=window.devicePixelRatio;
 const kh=new Uint8Array(26); // keys currently held on that frame
@@ -261,29 +287,19 @@ const canvOS=(e)=>{
 	ox=ox*ds+(e.clientX-cx)*(1-ds);
 	oy=oy*ds+(e.clientY-cy)*(1-ds);
 }
-
-
-// two finger drag and zoom
+// 1.6: two finger drag and zoom
 const canvTch=(e)=>{
 	e.preventDefault();
 	if(e.touches.length!==2)return;
 	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
 	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
-	//const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
-	//const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[0].clientY+20];
-
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
-	//
-	const[intlAngle]=[Math.atan2(intlY2-intlY1,intlX2-intlX1)];
-	const intlGr=gr;
 	const move=(e)=>{
 		e.preventDefault();
 		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
 		const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
-		//const[curX1,curX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
-		//const[curY1,curY2]=[e.touches[0].clientY,e.touches[0].clientY+15];
 		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
 		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
 		const curDist=Math.hypot(curXD,curYD);
@@ -294,10 +310,6 @@ const canvTch=(e)=>{
 		const newIntlOY=intlOY*ds+(curCY-cy)*(1-ds);
 		ox=newIntlOX+dx;
 		oy=newIntlOY+dy;
-		//
-		const[curAngle]=[Math.atan2(curY2-curY1,curX2-curX1)];
-		const deltaAngle=curAngle-intlAngle;
-		gr=intlGr+deltaAngle;
 	}; 
 	const end=(e)=>{ 
 		canv.removeEventListener('touchmove',move); 
@@ -306,18 +318,10 @@ const canvTch=(e)=>{
 	canv.addEventListener('touchmove',move,{passive:false}); 
 	canv.addEventListener('touchend',end,{passive:false}); 
 }
-
-
-
-
-
-
-
-
 // --- section 2: building vm from scr string ---
 // 2.0: buildVM, usually called on codeWrite key input
 const buildVM=()=>{
-	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=1,gr=0,em.clear(),strCache.clear();
+	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=1,em.clear(),strCache.clear();
 	srcs.length=0,eles.length=0,strArr.fill(undefined);
 	for(let[v]of oMed)v.pause(); oMed.clear();
 	z=0,x=0,y2=0,gt=0;
@@ -664,7 +668,7 @@ const read=()=>{
 			case 179: // nw want same as sRdy in the crunch..
 			case 180: // nh
 			case 181: c[k++]=a[++i];eof=45*a[i++];break;    // eoSt
-			case 182: d[l++]=c[--k]; // eo end
+			case 182: d[l++]=c[--k];eof=45*d[l-1]; // eo end 
 			case 183:case 189:case 190:case 191:case 192:case 193:case 194:case 195:
 			case 196:case 197:case 199:case 200:case 201:case 202:
 			b[eof+(a[i]-183)]=e[--j];i++;break; // wp general case
@@ -770,11 +774,6 @@ const read=()=>{
 		b[eo+42]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
 	}
 	ctx.save();
-
-	ctx.translate(rcx+ox*pd,rcy+oy*pd);
-	ctx.rotate(gr);
-	ctx.translate(-(rcx+ox*pd),-(rcy+oy*pd));
-
 	for(i=l-1;i>=0;i--){
 		eo=d[i]*45,po=b[eo+35]*45;
 		while(k>0&&b[eo+35]!==c[k-1])ctx.restore(),k--;
