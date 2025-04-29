@@ -150,7 +150,7 @@ const srcs=[]; // arr of strings (src keys)
 const srcTs=new Uint8Array(512); // 0-4, img, sound etc
 // 0.2: glbs used for read()
 const ctx=canv.getContext("2d",{alpha:false});
-let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=1,gt=0,gs=1,pgT=performance.now();
+let rw,rh,ru,rcx,rcy,ox=0,oy=0,os=1,gt=0,gs=1,gr=0,pgT=performance.now();
 let cy, cx;
 let pd=window.devicePixelRatio;
 const kh=new Uint8Array(26); // keys currently held on that frame
@@ -263,7 +263,7 @@ const canvOS=(e)=>{
 }
 
 
-// pinch to scale
+// two finger drag and zoom
 const canvTch=(e)=>{
 	e.preventDefault();
 	if(e.touches.length!==2)return;
@@ -272,6 +272,9 @@ const canvTch=(e)=>{
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
+	//
+	const intlAngle=Math.atan2(intlCY-centy,intlCX-centx);
+	const intlGr=gr;
 	const move=(e)=>{
 		e.preventDefault();
 		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
@@ -286,6 +289,9 @@ const canvTch=(e)=>{
 		const newIntlOY=intlOY*ds+(curCY-cy)*(1-ds);
 		ox=newIntlOX+dx;
 		oy=newIntlOY+dy;
+		//
+		const curAngle=Math.atan2(curCY-centy,curCX-centx);
+		gr=intlGr+(curAngle-intlAngle);
 	}; 
 	const end=(e)=>{ 
 		canv.removeEventListener('touchmove',move); 
@@ -305,7 +311,7 @@ const canvTch=(e)=>{
 // --- section 2: building vm from scr string ---
 // 2.0: buildVM, usually called on codeWrite key input
 const buildVM=()=>{
-	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=1,em.clear(),strCache.clear();
+	p=0,oCnt=0,eoCnt=0,ox=0,oy=0,os=1,gr=0,em.clear(),strCache.clear();
 	srcs.length=0,eles.length=0,strArr.fill(undefined);
 	for(let[v]of oMed)v.pause(); oMed.clear();
 	z=0,x=0,y2=0,gt=0;
@@ -758,6 +764,11 @@ const read=()=>{
 		b[eo+42]=b[eo+40]+0.5*b[eo+37]; // cyPx=tPx+0.5HPx
 	}
 	ctx.save();
+
+	ctx.translate(rcx+ox*pd,rcy+oy*pd);
+	ctx.rotate(gr);
+	ctx.translate(-(rcx+ox*pd),-(rcy+oy*pd));
+
 	for(i=l-1;i>=0;i--){
 		eo=d[i]*45,po=b[eo+35]*45;
 		while(k>0&&b[eo+35]!==c[k-1])ctx.restore(),k--;
