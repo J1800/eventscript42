@@ -266,11 +266,11 @@ const canvOS=(e)=>{
 // two finger drag and zoom
 const canvTch=(e)=>{
 	e.preventDefault();
-	//if(e.touches.length!==2)return;
-	//const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
-	//const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
-	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
-	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[0].clientY+20];
+	if(e.touches.length!==2)return;
+	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
+	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
+	//const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
+	//const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[0].clientY+20];
 
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
@@ -280,10 +280,10 @@ const canvTch=(e)=>{
 	const intlGr=gr;
 	const move=(e)=>{
 		e.preventDefault();
-		//const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
-		//const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
-		const[curX1,curX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
-		const[curY1,curY2]=[e.touches[0].clientY,e.touches[0].clientY+15];
+		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
+		const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
+		//const[curX1,curX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
+		//const[curY1,curY2]=[e.touches[0].clientY,e.touches[0].clientY+15];
 		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
 		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
 		const curDist=Math.hypot(curXD,curYD);
