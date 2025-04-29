@@ -269,7 +269,7 @@ const canvTch=(e)=>{
 	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
 	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
-	const[intlDist,intlOS,intlOX,intlOY]=Math.hypot(intlXD,intlYD),os,ox,oy;
+	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
 	const move=()=>{ 
 		e.preventDefault();
