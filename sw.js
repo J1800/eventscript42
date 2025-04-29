@@ -1,5 +1,5 @@
-const CACHE_NAME='offline-v10'
-const CACHE_FILE='eventscript42.html'
+const CACHE_NAME='offline-v11'
+const CACHE_FILE='eventscript42-v1.html'
 
 self.addEventListener('install',e=>{
     self.skipWaiting()
