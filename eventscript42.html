@@ -297,7 +297,7 @@ const canvTch=(e)=>{
 		//
 		const[curAngle]=[Math.atan2(curY2-curY1,curX2-curX1)];
 		const deltaAngle=curAngle-intlAngle;
-		gr+=deltaAngle;
+		g=intlGr+deltaAngle;
 	}; 
 	const end=(e)=>{ 
 		canv.removeEventListener('touchmove',move); 
