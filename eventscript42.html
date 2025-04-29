@@ -266,21 +266,24 @@ const canvOS=(e)=>{
 // two finger drag and zoom
 const canvTch=(e)=>{
 	e.preventDefault();
-	if(e.touches.length!==2)return;
-	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
-	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
+	//if(e.touches.length!==2)return;
+	//const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
+	//const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
+	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
+	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[0].clientY+20];
+
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
 	//
-	const[intlAngle1]=[Math.atan2(intlY1-intlCY,intlX1-intlCX)]
-	const[intlAngle2]=[Math.atan2(intlY2-intlCY,intlX2-intlCX)]
-	const intlGr=gr
-
+	const[intlAngle]=[Math.atan2(intlY2-intlY1,intlX2-intlX1)];
+	const intlGr=gr;
 	const move=(e)=>{
 		e.preventDefault();
-		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
-		const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
+		//const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
+		//const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
+		const[curX1,curX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
+		const[curY1,curY2]=[e.touches[0].clientY,e.touches[0].clientY+15];
 		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
 		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
 		const curDist=Math.hypot(curXD,curYD);
@@ -292,10 +295,9 @@ const canvTch=(e)=>{
 		ox=newIntlOX+dx;
 		oy=newIntlOY+dy;
 		//
-		const[curAngle1]=[Math.atan2(curY1-curCY,curX1-curCX)]
-		const[curAngle2]=[Math.atan2(curY2-curCY,curX2-curCX)]
-		gr=intlGr+((curAngle2-curAngle1)-(intlAngle2-intlAngle1))
-
+		const[curAngle]=[Math.atan2(curY2-curY1,curX2-curX1)];
+		const deltaAngle=curAngle-intlAngle;
+		gr+=deltaAngle;
 	}; 
 	const end=(e)=>{ 
 		canv.removeEventListener('touchmove',move); 
