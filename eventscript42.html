@@ -236,7 +236,8 @@ const onLoad=()=>{
 	cOut('Welcome to the EventScript prototype. At some point, typing HELP will load a manual');
 	buildVM(); animId=requestAnimationFrame(read);
 	document.body.style.pointerEvents='auto';
-	if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js')
+	//if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js')
+	// works great but disabled for now, for faster testing
 };
 // 1.4: drag on canv to edit pos offset
 const canvOXY=(e)=>{
@@ -268,37 +269,23 @@ const canvTch=(e)=>{
 	if(e.touches.length!==2)return;
 	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
 	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
-
-	// test vers
-	//const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[0].clientX+20];
-	//const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[0].clientY+20];
-
-
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
-
-	let testvar=0;
 	const move=(e)=>{
 		e.preventDefault();
 		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
 		const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
-
-		// test vers
-		//const[curX1,curX2]=[e.touches[0].clientX,e.touches[0].clientX+20+testvar++];
-		//const[curY1,curY2]=[e.touches[0].clientY,e.touches[0].clientY+20+testvar++];
-
-
 		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
 		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
-		//console.log(e.touches[0].clientX);
 		const curDist=Math.hypot(curXD,curYD);
 		os=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist)); 
 		const ds=os/intlOS;
 		const[dx,dy]=[curCX-intlCX,curCY-intlCY];
-		ox=intlOX+dx,oy=intlOY+dy;
-		ox=ox*ds+(curCX-cx)*(1-ds);
-		oy=oy*ds+(curCY-cy)*(1-ds);
+		const newIntlOX=intlOX*ds+(curCX-cx)*(1-ds);
+		const newIntlOY=intlOY*ds+(curCY-cy)*(1-ds);
+		ox=newIntlOX+dx;
+		oy=newIntlOY+dy;
 	}; 
 	const end=(e)=>{ 
 		canv.removeEventListener('touchmove',move); 
