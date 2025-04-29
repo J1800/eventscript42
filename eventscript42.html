@@ -271,7 +271,7 @@ const canvTch=(e)=>{
 	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
-	const move=()=>{ 
+	const move=()=>{
 		e.preventDefault();
 		if(e.touches.length!==2)return; 
 		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
@@ -279,12 +279,10 @@ const canvTch=(e)=>{
 		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
 		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
 		const curDist=Math.hypot(curXD,curYD);
-		os=Math.min(1000,Math.max(0.01,intlOS*dist/intlDist)); 
-		const ds=os/iOS;
+		os=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist)); 
+		const ds=os/intlOS;
 		const[dx,dy]=[curCX-intlCX,curCY-intlCY];
-		ox=intlOX+dx,oy=intlOY+dy; // if any probs likely to be this..
-		// single fing jsut for normal emulation...
-		// if works can add glb rot...
+		ox=intlOX+dx,oy=intlOY+dy;
 		ox=ox*ds+(curCX-cx)*(1-ds);
 		oy=oy*ds+(curCY-cy)*(1-ds);
 	}; 
