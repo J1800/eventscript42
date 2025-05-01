@@ -226,6 +226,13 @@ const refresh=(e)=>{
 };
 // 1.3: page onLoad
 const onLoad=()=>{
+	window.addEventListener('devicemotion',function(e){
+	if(Math.abs(e.accelerationIncludingGravity.x)+
+	Math.abs(e.accelerationIncludingGravity.y)+
+	Math.abs(e.accelerationIncludingGravity.z)>15)
+	cOut('shake detected');
+	})
+
 	document.addEventListener("fullscreenchange",()=>refresh(null));
 	canv.addEventListener('touchstart',canvTch,{passive:false}); // tch evnt so tag/sj
 	refresh(null); window.addEventListener('resize',refresh);
