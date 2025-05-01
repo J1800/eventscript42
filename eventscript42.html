@@ -50,33 +50,7 @@
 <canvas id="canv" onmousedown="canvOXY(event)" onwheel="canvOS(event)"></canvas>
 <div id="workspace">
 	<div id="slider" onmousedown="slide(event)" ontouchstart="slide(event)"></div>
-	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)">color darkblue
-width 1.2
-left -width/2
-opacity 1
-#box1
-	scale 0.4
-	left -0.4
-	top -0.4
-	height 1.9
-	opacity 1
-	color red
-	#box2
-		scale 0.3
-		left -0.3
-		top -0.8
-		color darkgreen
-		opacity 1
-		#text
-			opacity 1
-			scale 0.7
-			source 0
-			color black
-			fontSize 0.1
-sources
-	texts
-		'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation'
-</textarea>
+	<textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off" oninput="buildVM()" onkeydown="cwKd(event)"></textarea>
 	<div id="consoleDiv"></div>
 	<input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" onkeydown="consInpKd(event)" oninput="consInpInp(event)" value=">">
 </div>
@@ -252,10 +226,19 @@ const refresh=(e)=>{
 };
 // 1.3: page onLoad
 const onLoad=()=>{
+	document.addEventListener("fullscreenchange",()=>refresh(null));
 	canv.addEventListener('touchstart',canvTch,{passive:false}); // tch evnt so tag/sj
 	refresh(null); window.addEventListener('resize',refresh);
-	document.addEventListener("keydown",e=>kh[e.key.charCodeAt(0)-97]=1);
-	document.addEventListener("keyup",e=>kh[e.key.charCodeAt(0)-97]=0);
+	document.addEventListener("keydown",e=>{
+		const idx=e.key.charCodeAt(0)-97;
+		kh[idx]=1;
+		kd[idx]=1;
+	});
+	document.addEventListener("keyup",e=>{
+		const idx=e.key.charCodeAt(0)-97;
+		kh[idx]=0;
+		ku[idx]=1;
+	});
 	window.addEventListener("deviceorientation",e=>{
 		pitch=e.beta||0;roll=e.gamma||0;yaw=e.alpha||0
 	});
@@ -281,6 +264,13 @@ const canvOXY=(e)=>{
 };
 // 1.5: mousewheel canv to edit offset scale
 const canvOS=(e)=>{
+	if(e.ctrlKey){
+        oy=oy+0.2*e.deltaY;
+        return;
+    }else if(e.altKey){
+        ox=ox+0.2*e.deltaY;
+        return;
+    }
 	const iOS=os;
 	os=Math.min(1000,Math.max(0.01,os+0.001*os*-e.deltaY));
 	const ds=os/iOS;
@@ -288,35 +278,51 @@ const canvOS=(e)=>{
 	oy=oy*ds+(e.clientY-cy)*(1-ds);
 }
 // 1.6: two finger drag and zoom
+let twoFngrFlg=false;
 const canvTch=(e)=>{
 	e.preventDefault();
-	if(e.touches.length!==2)return;
-	const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
-	const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
-	const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
-	const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
-	const[intlCX,intlCY]=[(intlX1+intlX2)/2,(intlY1+intlY2)/2];
-	const move=(e)=>{
-		e.preventDefault();
-		const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
-		const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
-		const[curXD,curYD]=[curX1-curX2,curY1-curY2];
-		const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
-		const curDist=Math.hypot(curXD,curYD);
-		os=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist)); 
-		const ds=os/intlOS;
-		const[dx,dy]=[curCX-intlCX,curCY-intlCY];
-		const newIntlOX=intlOX*ds+(curCX-cx)*(1-ds);
-		const newIntlOY=intlOY*ds+(curCY-cy)*(1-ds);
-		ox=newIntlOX+dx;
-		oy=newIntlOY+dy;
-	}; 
-	const end=(e)=>{ 
-		canv.removeEventListener('touchmove',move); 
-		canv.removeEventListener('touchend',end); 
-	}; 
-	canv.addEventListener('touchmove',move,{passive:false}); 
-	canv.addEventListener('touchend',end,{passive:false}); 
+	if(e.touches.length===1){
+		const[intlX,intlY]=[e.touches[0].clientX,e.touches[0].clientY];
+		const [intlOX,intlOY]=[ox,oy];
+		const move=(e)=>{
+			e.preventDefault();
+			if(twoFngrFlg)return;
+			const[curX,curY]=[e.touches[0].clientX,e.touches[0].clientY];
+			const[dx,dy]=[curX-intlX,curY-intlY];
+			ox=intlOX+dx;
+			oy=intlOY+dy;
+		}
+		const end=(e)=>{ 
+			canv.removeEventListener('touchmove',move); 
+			canv.removeEventListener('touchend',end); 
+		}; 
+		canv.addEventListener('touchmove',move,{passive:false}); 
+		canv.addEventListener('touchend',end,{passive:false}); 
+	}else if(e.touches.length===2){
+		twoFngrFlg=true;
+		const[intlX1,intlX2]=[e.touches[0].clientX,e.touches[1].clientX];
+		const[intlY1,intlY2]=[e.touches[0].clientY,e.touches[1].clientY];
+		const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
+		const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
+		const move=(e)=>{
+			const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
+			const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
+			const[curXD,curYD]=[curX1-curX2,curY1-curY2];
+			const[curCX,curCY]=[(curX1+curX2)/2,(curY1+curY2)/2];
+			const curDist=Math.hypot(curXD,curYD);
+			os=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist)); 
+			const ds=os/intlOS;
+			ox=intlOX*ds+(curCX-cx)*(1-ds);
+			oy=intlOY*ds+(curCY-cy)*(1-ds);
+		}
+		const end=(e)=>{ 
+			canv.removeEventListener('touchmove',move); 
+			canv.removeEventListener('touchend',end); 
+			twoFngrFlg=false;
+		}; 
+		canv.addEventListener('touchmove',move,{passive:false}); 
+		canv.addEventListener('touchend',end,{passive:false}); 
+	}
 }
 // --- section 2: building vm from scr string ---
 // 2.0: buildVM, usually called on codeWrite key input
@@ -379,8 +385,7 @@ const emO=(o,eoNum)=>{
 			const[s1,s2]=l.split('to');
 			o[0]=3;o[2]=Number(s1)||0;o[3]=Number(s2)||0;reak;
 		case(/[<>=]/.test(o[0])):
-			for(let i=0;i<o[1].length;i++)
-				for(let j=0;j<o[1][i][1].length;j++)emO(o[1][i][1][j],eoNum);
+			for(let i=0;i<o[1].length;i++)emO(o[1][i],eoNum);
 			o[2]=o[0]; o[0]=5; o[3]=eoNum; break; 
 		case(/^[a-z][a-zA-Z0-9]*(\s|$)/.test(o[0])):
 			let onSt=null,tar=null;
@@ -401,16 +406,17 @@ const emO=(o,eoNum)=>{
 // 2.3: flatten node into instructions (call on root) 
 const fltn=(arr,oNum)=>{
 	a[z++]=21; a[z++]=oNum; let jmp=z++; const xs=x;
-	for(let i=0;i<arr.length;i++)
+	for(let i=0;i<arr.length;i++){
 		if(arr[i][0]===1)fltnProp(arr[i],true);
+	}
 	a[jmp]=z;
 	for(let i=0;i<arr.length;i++){
 		let o=arr[i]; switch(o[0]){
-			case 0:
+			case 0: // eo
 				a[z++]=181; a[z++]=o[2]; // eo instr + num
 				fltn(o[1],oCnt++); 
 				a[z++]=182; break; // eoDrop instr
-			case 1: 
+			case 1: // prop
 				fltnProp(o,false); break;
 			case 2:
 				// // tlStrt,cnt,n*[dur,jmpOvIdx,intrr]
@@ -420,16 +426,16 @@ const fltn=(arr,oNum)=>{
 					const jmp=z++; fltn(o[1][j][1],oCnt++);
 					a[z++]=227; c[x++]=z++; a[jmp]=z;
 				} break;
-			case 3:
+			case 3: // intrvl
 				a[z++]=223;
 				a[z++]=y2; b2[y2++]=o[2]; // start time
 				a[z++]=y2; b2[y2++]=o[3]; // end time
 				jmp=z++;
 				fltn(o[1],oCnt++); a[jmp]=z; break;
-			case 4:
+			case 4: // pgs
 				// 225, cnt, jmpO, ...pgIdxs (a[i+3+pg]) ...pgs
 				a[z++]=225; a[z++]=o[1].length; c[x++]=z++;
-				const tblSt=z;
+				const tblSt=z; z+=o[1].length;
 				for(let j=0;j<o[1].length;j++){
 					a[tblSt+j]=z;
 					fltn(o[1][j][1],oCnt++);
@@ -439,10 +445,10 @@ const fltn=(arr,oNum)=>{
 				const iSt=i;
 				while(o[1].length===0)
 					if(arr[i+1]?.[0]===5)o=arr[++i];else break;
-				for(let j=iSt;j<i;j++)
-					if(buildPF(arr[j][2]),arr[j][3])a[z++]=226,c[x++]=z++;
+				for(let j=iSt;j<i+1;j++)
+					if(buildPF(arr[j][2],arr[j][3]))a[z++]=226,c[x++]=z++;
 				a[z++]=227; const jmpO=z++; // uncond jmp over
-				while(x>xs)a[c[x--]]=z; // fill cnd jmp idxes
+				while(x>xs)a[c[--x]]=z; // fill cnd jmp idxes
 				fltn(o[1],oCnt++); a[jmpO]=z; break;
 			case 6: // srcs
 				for(let j=0;j<o[1].length;j++){
@@ -457,7 +463,8 @@ const fltn=(arr,oNum)=>{
 					}
 				}
 		}
-		while(x>xs)a[c[x--]]=z;
+		while(x>xs)a[c[--x]]=z;
+
 	}
 }
 // 2.4: spec flatten, used by 2.3
@@ -747,7 +754,7 @@ const read=()=>{
 				}break;
 			case 225: // pgStrt (if pg in range, jmp to [+pg] else jmp over)
 				const pg=b[eof+18];
-				if(pg>=0&&pg<=a[i+1])i=a[i+3+pg];
+				if(pg>=0&&pg<=a[i+1]-1)i=a[i+3+pg];
 				else i=a[i+2];break;
 			case 226: if(e[--j])i=a[i+1];else i+=2;break; // chk/cnd jmp
 			case 227: i=a[i+1];break; // uncnd jmp
@@ -857,6 +864,9 @@ const read=()=>{
 	tempMed.clear(); nMed=tempMed;
 	oSet.set(nSet.subarray(0,oCnt)); nSet.fill(0,0,oCnt);
 	animId=requestAnimationFrame(read);
+	kd.fill(0);ku.fill(0); // 100>2 cycles if use a flg for this instead
+	// also diff in nature from o/nSet, so bitwise would make more sense
+	// ult would want it to only actually listen for the scr actually contained..
 }
 // 3.1: splits monospace str into multiline
 const split=(str,lw)=>{
@@ -1039,7 +1049,7 @@ const consCmd=(str)=>{
 		'>EXPTXT':(args)=>expTxtFile(),
 		'>IMPTXT':(args)=>impTxtFile(),
 		'>FS':(args)=>document.body.requestFullscreen(),
-		'>DFS':(args)=>canv.requestFullscreen(),
+		'>CFS':(args)=>canv.requestFullscreen(),
 		'>SS':(args)=>ss(),
 		'>REQ':(args)=>{
 			if(typeof DeviceOrientationEvent.requestPermission!=='function')
