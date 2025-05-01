@@ -286,7 +286,7 @@ const canvTch=(e)=>{
 		const [intlOX,intlOY]=[ox,oy];
 		const move=(e)=>{
 			e.preventDefault();
-			if(twoFngrFlg)return;
+			if(twoFngrFlg)return; if(e.touches.length!==1)return;
 			const[curX,curY]=[e.touches[0].clientX,e.touches[0].clientY];
 			const[dx,dy]=[curX-intlX,curY-intlY];
 			ox=intlOX+dx;
@@ -305,6 +305,8 @@ const canvTch=(e)=>{
 		const[intlXD,intlYD]=[intlX1-intlX2,intlY1-intlY2];
 		const[intlDist,intlOS,intlOX,intlOY]=[Math.hypot(intlXD,intlYD),os,ox,oy];
 		const move=(e)=>{
+			e.preventDefault();
+			twoFngrFlg=true; if(e.touches.length!==2)return;
 			const[curX1,curX2]=[e.touches[0].clientX,e.touches[1].clientX];
 			const[curY1,curY2]=[e.touches[0].clientY,e.touches[1].clientY];
 			const[curXD,curYD]=[curX1-curX2,curY1-curY2];
