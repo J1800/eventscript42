@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>EventScript44</title>
+  <link rel="icon" href="appIcon.png" sizes="180x180">
+  <link rel="apple-touch-icon" href="appIcon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="EventScript44">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8">
+  <style>
+    html{
+      overscroll-behavior:none;
+    }
+    body{
+      --r:60;
+      margin:0;
+    }
+    #canv{
+      background-color:black;
+      position:fixed; /* how necessary is this*/
+    }
+    #codeWriter{
+      background-color:#1d1919; /* check everyhting below*/
+      border:none;
+      box-shadow: 12px 12px rgb(0, 0, 16);
+      box-sizing: content-box;
+      color:#d4d4d4;
+      font-size:14px;
+      font-family: monospace;
+      opacity:var(--o);
+      outline:none;
+      position:absolute;
+      resize:none;
+      scrollbar-color:#5a5a5a transparent;
+      tab-size:4;
+      white-space:pre;
+      will-change:height,left,top,width;
+    }
+    #colorTestDiv{
+      color:white;
+      height:0;
+      width:0;
+    }
+    #consInp{ /* check everyhting below*/
+      background-color:navy;
+      border-radius:0;
+      bottom:24px;
+      color:#576dba;
+      font-family:monospace;
+      font-size:12px;
+      opacity:var(--o);
+      outline:none;
+      position:absolute;
+      right:24px;
+      top:calc(100% - 44px);
+      will-change:background,height,left,top,width
+    }
+    #consSelect{ /* check everyhting below*/
+        left:8px;
+        right:0;
+        bottom:0;
+        top:calc(65% - 8px);
+        position: absolute;
+      }
+    #consoleDiv{ /* check everyhting below*/
+      background-color:#0d0a42;
+      bottom:60px;
+      color:#52688e;
+      box-shadow: 12px 12px rgb(0, 0, 16);
+      display:flex;
+      flex-direction:column;
+      font-family:monospace;
+      font-size:12px;
+      justify-content:flex-end;
+      opacity:var(--o);
+      overflow-x:hidden;
+      overflow-y:auto;
+      position:absolute;
+      right:24px;
+      scrollbar-color:#4d63b0 transparent;
+      scroll-behavior:smooth;
+      will-change:height,left,top,width;
+      word-wrap:break-word;
+    }
+    #curtain{
+      position:absolute;
+      background:#6178ad; /* try royal blue*/
+      will-change:background,left,top,width,height;
+    }
+    #cwSelect{ /* check everyhting below*/
+      top:0;
+      left:8px;
+      right:0;
+      bottom:calc(35% + 8px);
+      position: absolute;
+    }
+    #dropShadow{ /* check everyhting below*/
+      background-color: rgb(0, 0, 16);
+      top:calc(100% - 32px);
+      right:12px;
+      bottom:12px;
+      position: absolute;
+    }
+    #workspace{ /* how necessary is this*/
+      position:fixed;
+      background:black; /* def not necessary..*/
+      background-color: #25458F;
+      right:0; /* so set top to 0 to remove height calc in porttrait?*/
+    }
+    @keyframes colorFade{
+      0%{background-color:#1e7a00;}
+      100%{background-color:#6b7dc6;}
+    }
+    @media(orientation:landscape){
+      #canv{
+        height:100dvh; /* would this be default...*/
+        width:calc(var(--r) * 1dvw);
+      }
+      #codeWriter{
+        bottom:calc(35% + 34px);
+        left:24px;
+        right:28px;
+        top:16px;
+      }
+      #consInp{
+        left:24px;
+      }
+      #consoleDiv{
+        left:24px;
+        top:65%
+      }
+      #curtain{
+        height:100dvh; /* check not def? */
+        width:8px;
+      }
+      #dropShadow{
+        left:36px;
+      }
+      #workspace{
+        height:100dvh; /* check not def? */
+        left:calc(var(--r) * 1dvw);
+        top:0; /* check not def? esp as canv skips it...*/
+      }
+    }
+    @media(orientation:portrait){
+      #canv{
+        height:calc(var(--r) * 1dvh);
+        width:100dvw; /*    again.*/
+      }
+      #codeWriter{
+        bottom:24px;
+        left:16px;
+        right:calc(35% + 34px);
+        top:24px;
+      }
+      #consInp{
+        left:65%;
+      }
+      #consoleDiv{
+        left:65%;
+        top:24px;
+      }
+      #curtain{
+        height:8px;
+        width:100dvw; /* check not def? */
+      }
+      #dropShadow{
+        left:65%;
+      }
+      #workspace{
+        height:calc(100dvh - var(--r) * 1dvh); /* asym here with landscape.. isnt bot 0? */
+        left:0; /* check not def? */
+        top:calc(var(--r) * 1dvh);
+      }
+    }
+    @media(any-hover:hover){
+      .consoleLn:hover{
+        background:#6b7dc6;
+        color:navy;
+      }
+    }
+  </style>
+</head>
+<body onload="onLoad()" tabindex="-1">
+<canvas id="canv" tabindex="-1"></canvas>
+<div id="workspace">
+  <div id="cwSelect"></div>
+  <div id="consSelect"></div>
+  <div id="curtain"></div>
+  <div id="dropShadow"></div>
+  <textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off"></textarea>
+  <div id="consoleDiv"></div>
+  <input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" value=">">
+</div>
+<div id="colorTestDiv"></div>
+<script>
+let selectionState=0;
+
+const onLoad=()=>{
+  return;
+  canv.onmousedown=e=>canvOXY(e);
+  canv.onwheel=e=>canvOS(e);
+  curtain.onmousedown=e=>slide(e);
+  curtain.ontouchstart=e=>slide(e);
+  codeWriter.oninput=e=>buildVM();
+  codeWriter.onkeydown=e=>cwKd(e);
+  consInp.onkeydown=e=>consInpKd(e);
+  consInp.oninput=e=>consInpInp(e);
+};
+
+function setSelectionState(n){
+    selectionState=n;
+    curtain.style.background=n===1?'#910723':null;
+    cwSelect.style.background=n===2?'#910723':null;
+    consSelect.style.background=n===3?'#910723':null;
+    if(n===0)document.body.focus();
+    else if(n===1)canv.focus();
+    else if(n===2)codeWriter.focus();
+    else if(n===3)consInp.focus();
+}
+
+document.addEventListener('mousedown',e=>{
+    const x=e.clientX;
+    const y=e.clientY;
+    const ax=canv.offsetLeft;
+    const ay=canv.offsetTop;
+    const aw=canv.offsetWidth;
+    const ah=canv.offsetHeight;
+    const bx=workspace.offsetLeft+cwSelect.offsetLeft;
+    const by=cwSelect.offsetTop;
+    const bw=cwSelect.offsetWidth;
+    const bh=cwSelect.offsetHeight;
+    const cx=workspace.offsetLeft+consSelect.offsetLeft;
+    const cy=consSelect.offsetTop;
+    const cw=consSelect.offsetWidth;
+    const ch=consSelect.offsetHeight;
+    if(x>=ax&&x<=ax+aw&&y>=ay&&y<=ay+ah)setSelectionState(1);
+    else if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh)setSelectionState(2);
+    else if(x>=cx&&x<=cx+cw&&y>=cy&&y<=cy+ch)setSelectionState(3);
+});
+
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape')setSelectionState(0);
+    else if(e.key==='Tab'){
+        e.preventDefault();
+        const next=selectionState===3?1:selectionState+1;
+        setSelectionState(next);
+    }
+});
+
+
+
+
+</script></body></html>
