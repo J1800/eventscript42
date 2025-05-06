@@ -19,52 +19,44 @@
     }
     #canv{
       background-color:black;
-      position:fixed; /* how necessary is this*/
+      position:fixed;
     }
     #codeWriter{
-      background-color:#1d1919; /* check everyhting below*/
+      background-color:#1d1919;
       border:none;
       border-radius: 0; /* overrides mobile-safari auto */
-      box-shadow: 12px 12px rgb(0, 0, 16);
-      box-sizing: content-box;
-      color:#d4d4d4;
+      box-shadow: 12px 12px #000010;
+      color:#abb3b2;
       font-size:14px;
       font-family: monospace;
-      opacity:var(--o);
       outline:none;
       position:absolute;
       resize:none;
       scrollbar-color:#5a5a5a transparent;
-      tab-size:4;
       white-space:pre;
-      will-change:height,left,top,width;
     }
     #colorTestDiv{
-      color:white;
       height:0;
       width:0;
     }
-    #consInp{ /* check everyhting below*/
+    #consInp{
       background-color:navy;
-      border-radius:0;
+      border:none; /* overrides mobile-safari auto */
+      border-radius:0; /* overrides mobile-safari auto */
       bottom:24px;
       color:#576dba;
       font-family:monospace;
       font-size:12px;
-      opacity:var(--o);
       outline:none;
       position:absolute;
       right:24px;
       top:calc(100% - 44px);
-      will-change:background,height,left,top,width
     }
-    #consSelect{ /* check everyhting below*/
-        left:8px;
-        right:0;
-        bottom:0;
-        top:calc(65% - 8px);
-        position: absolute;
-      }
+    #consSelect{ /* check everyhting below ///////////// swappng over, then contmchecks */
+      bottom:0;
+      position: absolute;
+      right:0;
+    }
     #consoleDiv{ /* check everyhting below*/
       background-color:#0d0a42;
       bottom:60px;
@@ -132,6 +124,10 @@
         left:24px;
         top:65%
       }
+      #consSelect{
+        left:8px;
+        top:calc(65% - 8px);
+      }
       #curtain{
         height:100dvh; /* check not def? */
         width:8px;
@@ -162,6 +158,10 @@
       #consoleDiv{
         left:65%;
         top:24px;
+      }
+      #consSelect{
+        left:calc(65% - 8px);
+        top:8px;
       }
       #curtain{
         height:8px;
