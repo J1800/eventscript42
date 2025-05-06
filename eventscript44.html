@@ -14,7 +14,7 @@
       overscroll-behavior:none;
     }
     body{
-      --r:60;
+      --r:70;
       margin:0;
     }
     #canv{
@@ -24,6 +24,7 @@
     #codeWriter{
       background-color:#1d1919; /* check everyhting below*/
       border:none;
+      border-radius: 0; /* overrides mobile-safari auto */
       box-shadow: 12px 12px rgb(0, 0, 16);
       box-sizing: content-box;
       color:#d4d4d4;
@@ -167,7 +168,7 @@
         width:100dvw; /* check not def? */
       }
       #dropShadow{
-        left:65%;
+        left:calc(65% + 12px);
       }
       #workspace{
         height:calc(100dvh - var(--r) * 1dvh); /* asym here with landscape.. isnt bot 0? */
