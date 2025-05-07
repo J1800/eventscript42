@@ -14,11 +14,12 @@
       overscroll-behavior:none;
     }
     body{
-      --r:70;
+      --r:75;
       margin:0;
     }
     #canv{
       background-color:black;
+      outline: none; /* overrides mobile since focusable */
       position:fixed;
     }
     #codeWriter{
@@ -90,15 +91,6 @@
       right:16px;
       top:calc(100% - 36px);
     }
-    #glbs{
-      bottom:28px;
-      color:#576dba;
-      font-family:monospace;
-      font-size:16px;
-      position:absolute;
-      top:calc(100% - 48px);
-      width: 8ch;
-    }
     #workspace{
       background:#25458F;
       bottom:0;
@@ -121,7 +113,7 @@
         top:16px;
       }
       #consInp{
-        left:calc(34px + 8ch + 16px);
+        left:calc(24px + 44px);
       }
       #consoleDiv{
         left:24px;
@@ -142,10 +134,7 @@
         top:0;
       }
       #dropShadow{
-        left:calc(34px + 8ch + 40px);
-      }
-      #glbs{
-        left:34px;
+        left:calc(24px + 44px + 12px);
       }
       #workspace{
         left:calc(var(--r) * 1dvw);
@@ -164,7 +153,7 @@
         top:24px;
       }
       #consInp{
-        left:calc(65% + 16px + 12px + 8ch + 16px);
+        left:calc(65% + 16px + 44px);
       }
       #consoleDiv{
         left:calc(65% + 16px);
@@ -186,9 +175,7 @@
         top:8px;
       }
       #dropShadow{
-        left:calc(65% + 16px + 12px + 8ch + 16px + 24px);
-      }#glbs{
-        left:calc(65% + 16px + 12px);
+        left:calc(65% + 16px + 44px + 12px);
       }
       #workspace{
         left:0;
@@ -211,7 +198,6 @@
   <div id="curtain"></div>
   <textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off"></textarea>
   <div id="consoleDiv"></div>
-  <div id="glbs">000 0000</div>
   <div id="dropShadow"></div>
   <input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" value=">">
 </div>
@@ -223,7 +209,7 @@ let selectionState=0;
 const onLoad=()=>{
   document.addEventListener('mousedown',mouseOrTouchSelect);
   document.addEventListener('keydown',keyboardSelect);
-  document.addEventListener('touchstart',mouseOrTouchSelect);
+  document.addEventListener('touchstart',mouseOrTouchSelect,{passive:false});
   return;
   canv.addEventListener('mousedown',canvOXY);
   canv.addEventListener('wheel',canvOS);
@@ -266,8 +252,8 @@ const setSelectionState=(n)=>{
 
 const mouseOrTouchSelect=e=>{
   e.preventDefault();
-  const x=e.clientX;
-  const y=e.clientY;
+  const x=e.clientX??e.touches?.[0]?.clientX;
+  const y=e.clientY??e.touches?.[0]?.clientY;
   const ax=canv.offsetLeft;
   const ay=canv.offsetTop;
   const aw=canv.offsetWidth;
@@ -295,7 +281,29 @@ const keyboardSelect=e=>{
   }
 };
 
-
+// --- section 5: console ---
+// 5.0: writes to console
+const cOut=(str,frUser=false)=>{
+  const span=document.createElement('span');
+  if(frUser)span.appendChild(document.createTextNode('> '+str));
+  else span.appendChild(document.createTextNode(str));
+  if(!frUser){
+    span.className='consoleLn';
+    span.onmousedown=()=>{
+      if(!span.style.animation){  //  checks for both null and empty string
+        span.style.color='navy';
+        navigator.clipboard.writeText(str);
+        span.style.animation='colorFade 0.9s ease-in-out forwards';
+        setTimeout(()=>{
+          span.style.animation=null;
+          span.style.color=null;
+        }, 800);
+      }
+    };
+  }
+  consoleDiv.appendChild(span);
+  consoleDiv.scrollTop = consoleDiv.scrollHeight;
+};
 
 
 
