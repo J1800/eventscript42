@@ -212,7 +212,7 @@ const consCmd=(str)=>{ // enforce alphabetical...
 
 // small misc funcs, mostly called by console
 const rat=n=>{
-  if(n>=0.1&&n<=0.75){
+  if(n>=10&&n<=75){
       document.body.style.setProperty('--r',n);
       cOut(`canvas-workspace ratio set to ${n}%`);
   }else{
@@ -221,8 +221,14 @@ const rat=n=>{
   //refresh();
 };
 const fs=()=>{
-  cOut('Entering fullscreen...'); document.body.requestFullscreen(); // need exit cmd too
+  cOut('Entering fullscreen');
+  try{
+    document.body.requestFullscreen();
+  }catch{
+    cOut('Fullscreen request blocked by browser. If you are on mobile, try the command MFS');
+  }
 };
+
 
 
 
