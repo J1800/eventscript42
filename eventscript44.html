@@ -90,6 +90,7 @@ const onLoad=()=>{
 };
 
 const setSelectionState=(n)=>{
+  if(selectionState===n)return;
   selectionState=n;
   curtain.style.background=n===1?'#910723':null;
   cwSelect.style.background=n===2?'#910723':null;
