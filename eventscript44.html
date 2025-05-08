@@ -125,18 +125,24 @@ const setSelectionState=(n)=>{
 const mouseOrTouchSelect=e=>{
   const x=e.clientX??e.touches?.[0]?.clientX;
   const y=e.clientY??e.touches?.[0]?.clientY;
-  const ax=canv.offsetLeft;
-  const ay=canv.offsetTop;
-  const aw=canv.offsetWidth;
-  const ah=canv.offsetHeight;
-  const bx=workspace.offsetLeft+cwSelect.offsetLeft;
-  const by=workspace.offsetTop+cwSelect.offsetTop;
-  const bw=cwSelect.offsetWidth;
-  const bh=cwSelect.offsetHeight;
-  const cx=workspace.offsetLeft+consSelect.offsetLeft;
-  const cy=workspace.offsetTop+consSelect.offsetTop;
-  const cw=consSelect.offsetWidth;
-  const ch=consSelect.offsetHeight;
+  const a=canv.getBoundingClientRect();
+const ax=a.x;
+const ay=a.y;
+const aw=a.width;
+const ah=a.height;
+
+const b=cwSelect.getBoundingClientRect();
+const bx=b.x;
+const by=b.y;
+const bw=b.width;
+const bh=b.height;
+
+const c=consSelect.getBoundingClientRect();
+const cx=c.x;
+const cy=c.y;
+const cw=c.width;
+const ch=c.height;
+
   if(x>=ax&&x<=ax+aw&&y>=ay&&y<=ay+ah&&selectionState!==1)setSelectionState(1),e.preventDefault();
   else if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh&&selectionState!==2)setSelectionState(2),e.preventDefault();
   else if(x>=cx&&x<=cx+cw&&y>=cy&&y<=cy+ch&&selectionState!==3)setSelectionState(3),e.preventDefault();
