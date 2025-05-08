@@ -9,184 +9,45 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta charset="UTF-8">
-  <style>
-    html{
-      overscroll-behavior:none;
-    }
-    body{
-      --r:75;
-      margin:0;
-    }
-    #canv{
-      background-color:black;
-      outline: none; /* overrides mobile since focusable */
-      position:fixed;
-    }
-    #codeWriter{
-      background-color:#1d1919;
-      border:none;
-      border-radius: 0; /* overrides mobile-safari auto */
-      box-shadow: 12px 12px #000010;
-      color:#abb3b2;
-      font-size:14px;
-      font-family: monospace;
-      outline:none;
-      position:absolute;
-      resize:none;
-      scrollbar-color:#5a5a5a transparent;
-      white-space:pre;
-    }
-    #colorTestDiv{
-      height:0;
-      width:0;
-    }
-    #consInp{
-      background-color:navy;
-      border:none; /* overrides mobile-safari auto */
-      border-radius:0; /* overrides mobile-safari auto */
-      bottom:28px;
-      color:#576dba;
-      font-family:monospace;
-      font-size:16px;
-      outline:none;
-      position:absolute;
-      right:28px;
-      top:calc(100% - 48px);
-    }
-    #consSelect{
-      bottom:0;
-      position: absolute;
-      right:0;
-    }
-    #consoleDiv{
-      background-color:#0d0a42;
-      bottom:70px;
-      color:#52688e;
-      box-shadow: 12px 12px #000010;
-      display:flex;
-      flex-direction:column;
-      font-family:monospace;
-      font-size:12px;
-      justify-content:flex-end;
-      overflow-x:hidden;
-      overflow-y:auto;
-      position:absolute;
-      right:28px;
-      scrollbar-color:#4d63b0 transparent;
-      scroll-behavior:smooth;
-      word-wrap:break-word;
-    }
-    #curtain{
-      position:absolute;
-      background:#6178ad;
-    }
-    #cwSelect{
-      position: absolute;
-    }
-    #dropShadow{
-      background:#000010;
-      bottom:16px;
-      font-size: 16px; /* for ch calc */
-      position: absolute;
-      right:16px;
-      top:calc(100% - 36px);
-    }
-    #workspace{
-      background:#25458F;
-      bottom:0;
-      position:fixed;
-      right:0;
-    }
-    @keyframes colorFade{
-      0%{background-color:#1e7a00;}
-      100%{background-color:#6b7dc6;}
-    }
+  <style> /*star='a non-obvious reason exists'(eg covers strange mobile overrides)*/
+    html{overscroll-behavior:none}
+    body{--r:75;background:black;/**/margin:0}
+    #canv{background-color:black;outline:none;pointer-events:none;position:fixed}
+    #codeWriter{background-color:#1d1919;border:none;border-radius:0;/**/box-shadow:12px 12px #000010;color:#abb3b2;font-size:14px;font-family:monospace;outline:none;pointer-events:none;position:absolute;resize:none;scrollbar-color:#5a5a5a transparent;white-space:pre}
+    #colorTestDiv{height:0;width:0}
+    #consInp{background-color:navy;border:none;/**/border-radius:0;/**/bottom:28px;color:#576dba;font-family:monospace;font-size:16px;outline:none;pointer-events:none;position:absolute;right:28px;top:calc(100% - 48px)}
+    #consSelect{bottom:0;position:absolute;right:0;}
+    #consoleDiv{background-color:#0d0a42;bottom:70px;color:#52688e;box-shadow:12px 12px #000010;display:flex;flex-direction:column;font-family:monospace;font-size:12px;justify-content:flex-end;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;pointer-events:none;position:absolute;right:28px;scrollbar-color:#4d63b0 transparent;scroll-behavior:smooth;word-wrap:break-word}
+    .consoleLn{cursor:default}
+    #curtain{position:absolute;background:#6178ad}
+    #cwSelect{position:absolute}
+    #dropShadow{background:#000010;bottom:16px;position:absolute;right:16px;top:calc(100% - 36px)}
+    #workspace{background:#25458F;bottom:0;position:fixed;right:0;}
+    @keyframes colorFade{0%{background-color:#a88f05}100%{background-color:#6b7dc6}}
     @media(orientation:landscape){
-      #canv{
-        height:100dvh;
-        width:calc(var(--r) * 1dvw);
-      }
-      #codeWriter{
-        bottom:calc(35% + 28px);
-        left:24px;
-        right:28px;
-        top:16px;
-      }
-      #consInp{
-        left:calc(24px + 44px);
-      }
-      #consoleDiv{
-        left:24px;
-        top:calc(65% + 16px);
-      }
-      #consSelect{
-        left:8px;
-        top:65%;
-      }
-      #curtain{
-        height:100dvh;
-        width:8px;
-      }
-      #cwSelect{
-        bottom:35%;
-        left:8px;
-        right:0;
-        top:0;
-      }
-      #dropShadow{
-        left:calc(24px + 44px + 12px);
-      }
-      #workspace{
-        left:calc(var(--r) * 1dvw);
-        top:0;
-      }
+      #canv{height:100dvh;width:calc(var(--r) * 1dvw)}
+      #codeWriter{bottom:calc(35% + 28px);left:24px;right:28px;top:16px}
+      #consInp{left:calc(24px + 44px)}
+      #consoleDiv{left:24px;top:calc(65% + 16px)}
+      #consSelect{left:8px;top:65%}
+      #curtain{height:100dvh;width:8px}
+      #cwSelect{bottom:35%;left:8px;right:0;top:0}
+      #dropShadow{left:calc(24px + 44px + 12px)}
+      #workspace{left:calc(var(--r) * 1dvw);top:0}
     }
     @media(orientation:portrait){
-      #canv{
-        height:calc(var(--r) * 1dvh);
-        width:100dvw;
-      }
-      #codeWriter{
-        bottom:28px;
-        left:16px;
-        right:calc(35% + 28px);
-        top:24px;
-      }
-      #consInp{
-        left:calc(65% + 16px + 44px);
-      }
-      #consoleDiv{
-        left:calc(65% + 16px);
-        top:24px;
-      }
-      #consSelect{
-        bottom:0;
-        left:65%;
-        top:8px;
-      }
-      #curtain{
-        height:8px;
-        width:100dvw;
-      }
-      #cwSelect{
-        bottom:0;
-        left:0;
-        right:35%;
-        top:8px;
-      }
-      #dropShadow{
-        left:calc(65% + 16px + 44px + 12px);
-      }
-      #workspace{
-        left:0;
-        top:calc(var(--r) * 1dvh);
-      }
+      #canv{height:calc(var(--r) * 1dvh);width:100dvw}
+      #codeWriter{bottom:28px;left:16px;right:calc(35% + 28px);top:24px}
+      #consInp{left:calc(65% + 16px + 44px)}
+      #consoleDiv{left:calc(65% + 16px);top:24px}
+      #consSelect{bottom:0;left:65%;top:8px}
+      #curtain{height:8px;width:100dvw}
+      #cwSelect{bottom:0;left:0;right:35%;top:8px}
+      #dropShadow{left:calc(65% + 16px + 44px + 12px)}
+      #workspace{left:0;top:calc(var(--r) * 1dvh)}
     }
     @media(any-hover:hover){
-      .consoleLn:hover{
-        background:#6b7dc6;
-        color:navy;
-      }
+      .consoleLn:hover{background:#6b7dc6;color:navy}
     }
   </style>
 </head>
@@ -206,18 +67,25 @@
 
 let selectionState=0;
 
+
+
+
+
+
 const onLoad=()=>{
   document.addEventListener('mousedown',mouseOrTouchSelect);
   document.addEventListener('keydown',keyboardSelect);
   document.addEventListener('touchstart',mouseOrTouchSelect,{passive:false});
+  document.addEventListener("visibilitychange",()=>setSelectionState(0));
+  consInp.addEventListener('keydown',consInpKd);
+  codeWriter.addEventListener('keydown',cwKd);
+  document.addEventListener('fullscreenchange',fsExit);
   return;
   canv.addEventListener('mousedown',canvOXY);
   canv.addEventListener('wheel',canvOS);
   curtain.addEventListener('mousedown',slide);
   curtain.addEventListener('touchstart',slide);
   codeWriter.addEventListener('input',buildVM);
-  codeWriter.addEventListener('keydown',cwKd);
-  consInp.addEventListener('keydown',consInpKd);
   consInp.addEventListener('input',consInpInp);
 };
 
@@ -233,10 +101,14 @@ const setSelectionState=(n)=>{
   canv.style.pointerEvents='none';
   codeWriter.style.pointerEvents='none';
   consInp.style.pointerEvents='none';
+  consoleDiv.style.pointerEvents='none';
 
   if(n===1)canv.style.pointerEvents='auto';
   else if(n===2)codeWriter.style.pointerEvents='auto';
-  else if(n===3)consInp.style.pointerEvents='auto';
+  else if(n===3){
+    consInp.style.pointerEvents='auto';
+    consoleDiv.style.pointerEvents='auto';
+  }
 
   consInp.value='>';
 
@@ -280,30 +152,82 @@ const keyboardSelect=e=>{
       setSelectionState(next);
   }
 };
+const consInpKd=e=>{
+  if(e.key==='Enter'){
+    const str=e.target.value;cOut(str,true);consCmd(str);e.target.value='>';
+  }
+};
+
+// codeWriter keydown (oninput-e hdls the buildVM)
+const cwKd=(e)=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const cw=codeWriter,cwV=cw.value;
+    const s=codeWriter.selectionStart;
+    const lS=cwV.lastIndexOf('\n',s-1)+1;
+    let i=lS,c=0;
+    while(cwV[i]===' '){c++;i++;}
+    const pad='\n'+Array(c+1).join(' ');
+    codeWriter.value=cwV.substring(0,s)+pad+cwV.substring(cw.selectionEnd);
+    codeWriter.selectionStart=cw.selectionEnd=s+pad.length;
+    //buildVM();
+  }
+};
+
+const fsExit=()=>{
+    if(!document.fullscreenElement)cOut('Exited fullscreen'); refresh(null)
+};
 
 // --- section 5: console ---
 // 5.0: writes to console
 const cOut=(str,frUser=false)=>{
   const span=document.createElement('span');
-  if(frUser)span.appendChild(document.createTextNode('> '+str));
+  if(frUser)span.appendChild(document.createTextNode(str));
   else span.appendChild(document.createTextNode(str));
   if(!frUser){
     span.className='consoleLn';
     span.onmousedown=()=>{
-      if(!span.style.animation){  //  checks for both null and empty string
-        span.style.color='navy';
-        navigator.clipboard.writeText(str);
+      if(!span.style.animation){
+        span.style.color='navy'; navigator.clipboard.writeText(str);
         span.style.animation='colorFade 0.9s ease-in-out forwards';
-        setTimeout(()=>{
-          span.style.animation=null;
-          span.style.color=null;
-        }, 800);
+        setTimeout(()=>{span.style.animation=null;span.style.color=null;},800);
       }
     };
   }
-  consoleDiv.appendChild(span);
-  consoleDiv.scrollTop = consoleDiv.scrollHeight;
+  consoleDiv.appendChild(span);consoleDiv.scrollTop=consoleDiv.scrollHeight;
 };
+// 5.3: parses cmds
+const consCmd=(str)=>{ // enforce alphabetical...
+  const cmds={
+    '>FS':fs,
+    '>RAT':arg=>rat(arg),
+    '>OX':arg=>{ox=arg;}, // make sep func with coecion and 'needs a number'+cOut message
+    //'>UPL':locUpld,
+  }
+  const strT=str.trim(),spcIdx=strT.indexOf(' ');
+  const action=spcIdx===-1?strT.toUpperCase():strT.substring(0,spcIdx).toUpperCase();
+  const arg=spcIdx===-1?null:strT.substring(spcIdx+1);
+  if(cmds[action])cmds[action](arg);else cOut('Invalid command')
+}
+
+// small misc funcs, mostly called by console
+const rat=n=>{
+  if(n>=0.1&&n<=0.75){
+      document.body.style.setProperty('--r',n);
+      cOut(`canvas-workspace ratio set to ${n}%`);
+  }else{
+      cOut('RAT expects a number between 10 and 75');
+  }
+  //refresh();
+};
+const fs=()=>{
+  cOut('Entering fullscreen...'); document.body.requestFullscreen(); // need exit cmd too
+};
+
+
+
+
+
 
 
 
