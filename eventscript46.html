@@ -1,0 +1,429 @@
+<script>
+  document.documentElement.style.background='black';
+
+const a=new ArrayBuffer(8192);
+const a8=new Uint8Array(a),a16=Uint16Array(a);
+const a8s=new Int8Array(a),a16s=new Int16Array(a);
+const a32=new Float32Array(a),a64=new Float64Array(a);
+const em=new Map(),srcStrMap=new Map(),srcTyMap=new Map();
+const arrPool=[],emPool=[];
+const srcMap={images:0,texts:1,sounds:2,videos:3,scripts:4};
+const allowedColors=/^(?!.*rgba)(?!.*#.{8,}).*$/;
+
+
+const cmpScr=(str)=>{
+  let oCnt=1,eCnt=1,mxDpt=0,z=0; // z 16b it, later becomes 8
+  em.clear(); em.set('#root',0); srcStrMap.clear(),srcTyMap.clear();
+  // lns: dpt(becomes par),stCh,enCh,mpIdx,mpCnt,ty,oNm,eNm
+  a16.set([0,0,0,0,0,1,0,0],z);z+=8; // manual root evObj
+  // parse lns:
+  for(let i=0;i<str.length;i++){
+    const spcStart=i;while(str.charCodeAt(i)===32)i++;
+    const dpt=((i-spcStart)>>1)+1; 
+    const stCh=i;while(str.charCodeAt(i)!==10&&i<str.length)i++;
+    a16.set([dpt,stCh,i,0,0,0,0,0],z);z+=8;
+    if(dpt>mxDpt)mxDpt=dpt;
+  }
+  // set up lns and bStk:
+  const lns=new Uint16Array(a,0,z),numLns=lns.length/8;
+  const bStk=new Uint16Array(a,z*2,mxDpt),j=0; z+=mxDpt; // j=stkIt
+  const spine=new Uint16Array(a,z*2,numLns*3); z+=numLns*3;
+  bStk[j++]=0; // root into bStk
+  // modified cnt-sort. cnt sweep:
+  for(let i=1;i<numLns;i++){
+    const d=lns[i*8+0]; if(d>j+1)continue; while(d<j+1)j--;
+    const par=bStk[j-1]; lns[i*8+0]=par; lns[par*8+4]++; bStk[j++]=i
+  }
+  // idx/space set sweep(cnt reused as it):
+  const intlZ=z;
+  for(let i=0;i<numLns;i++)lns[i*8+3]=z-intlZ,z+=lns[i*8+4],lns[i*8+4]=0;
+  //  fill lnMap sweep
+  const lnMap=new Uint16Array(buff,intlZ*2,z-intlZ);
+  for(let i=1;i<numLns;i++){
+    const par=lns[i*8+0],parMapIdx=lns[par*8+3],parMapIt=lns[par*8+4];
+    lnMap[parMapIdx+parMapIt]=i; lns[par*8+4]++; // push to mp and inc
+  }
+  // filled lnMap, onto setting the instructions
+  // tys: 0:up,1:upEo,2:upPgs/Tl(aka sweep=false),3:validates else and switches to 0
+  j=1,z*=2; // bStk iterator back to root, z switched 16b->8b
+  a8[z]=64,a8[z+1]=0,a8[z+2]=0,a[z+3]=255; z+=4; // fund instrs
+  let sweep=true;
+  lp:while(j>0){
+    if(sweep){
+      const t=bStk[j-1],mapIdx=lns[t*8+3],mapCnt=lns[t*8+4],endIdx=mapIdx+mapCnt;
+      const oTy=lns[t*8+5],oNm=lns[t*8+6],eNm=lns[t*8+7]; spine[oNm]=z; lns[t*8+4]=0;
+      for(let i=mapIdx;i<endIdx;i++){
+        const ln=lnMap[i],lnStr=str.substring(lns[ln*8+1],lns[ln*8+2]); let writeFlg=false;
+        switch(lnStr){
+          case(propRegex.test(lnStr)):
+            const locSpIdx=lnStr.indexOf(' '),locProp=lnStr.substring(0,locSpIdx);
+            const locExpr=lnStr.substring(locSpIdx+1); if(!buildPF(locExpr,eNm,z))break;
+            if(locProp===colorStr){
+              if(allowedColors.test(locExpr))colorTestDiv.style.color=locExpr;
+              const cs=getComputedStyle(colorTestDiv).color;
+              const c1=cStr.indexOf(',',4),c2=cStr.indexOf(',',c1+1),en=cStr.indexOf(')',c2+1);
+              const r=Number(cs.slice(4,c1)),g=Number(cs.slice(c1+1,c2)),b=Number(cs.slice(c2+1,en));
+              a8[z]=59; a8[z+1]=r; a8[z+2]=g; a8[z+3]=b; colorTestDiv.style.color=''; z+=4;
+            }else if(pm8.has(locProp))a8[z]=51,a8[z+1]=pm8.get(locProp),z+=2;
+            else if(pm64.has(locProp))a8[z]=52,a8[z+1]=pm8.get(locProp),z+=2;
+            else{
+              let mtc=-1;
+              for(let j=0;j<10;j++){
+                if(!cstms.has(eNm*10+j))cstms.set(eNm*10+j,locProp);
+                if(cstms.get(eNm*10+j)===locProp){mtc=j;break}
+              }
+              if(mtc>-1)a8[z]=52,a8[z+1]=mtc+32,z+=2;else a8[z++]=63;
+            }
+            break;
+          case(extPropRegex.test(lnStr)):
+            const extSpIdx=lnStr.indexOf(' ');
+            const extPropAndEo=lnStr.substring(0,extSpIdx);
+            const extExpr=lnStr.substring(extSpIdx+1)
+            const dotIdx=extPropAndEo.indexOf('.');
+            const tarEo=Number(extPropAndEo.slice(0,dotIdx));
+            const extProp=extPropAndEo.slice(dotIdx+1);
+            if(tarEo<0||tarEo>eoCnt-1||!buildPF(extExpr,eNm,z))break;
+            if(extProp===colorStr){
+              if(allowedColors.test(locExpr))colorTestDiv.style.color=extExpr;
+              const cs=getComputedStyle(colorTestDiv).color;
+              const c1=cStr.indexOf(',',4),c2=cStr.indexOf(',',c1+1),en=cStr.indexOf(')',c2+1);
+              const r=Number(cs.slice(4,c1)),g=Number(cs.slice(c1+1,c2)),b=Number(cs.slice(c2+1,en));
+              if(tarEo<256)a8[z]=60,a[z+1]=tarEo,a8[z+2]=r,a8[z+3]=g,a8[z+4]=b; z+=5;
+              else if(z%2===0)a8[z]=62,a8[z+1]=r,a8[z+2]=g,a8[z+3]=b,a16[(z+4)/2]=tarEo; z+=6;
+              else a8[z]=61,a16[(z+1)/2]=tarEo,a8[z+3]=r,a8[z+4]=g,a8[z+5]=b; z+=6;
+              colorTestDiv.style.color='';
+            }else if(pm8.has(extProp)){
+              if(tarEo<256)a8[z]=53,a8[z+1]=pm8.get(extProp),a8[z+2]=tarEo,z+=3;
+              else if(z%2===0)a8[z]=54,a8[z+1]=pm8.get(extProp),a16[(z+2)/2]=tarEo,z+=4;
+              else a8[z]=55,a16[(z+1)/2]=tarEo,a8[z+3]=pm8.get(extProp),z+=4;
+            }else if(pm64.has(extProp)){
+              if(tarEo<256)a8[z]=56,a8[z+1]=pm64.get(extProp),a8[z+2]=tarEo,z+=3;
+              else if(z%2===0)a8[z]=57,a8[z+1]=pm64.get(extProp),a16[(z+2)/2]=tarEo,z+=4;
+              else a8[z]=58,a16[(z+1)/2]=tarEo,a8[z+3]=pm64.get(extProp),z+=4;
+            }else{
+              let mtc=-1;
+              for(let j=0;j<10;j++){
+                if(!cstms.has(tarEo*10+j))cstms.set(tarEo*10+j,extProp);
+                if(cstms.get(tarEo*10+j)===extProp){mtc=j;break}
+              }
+              if(mtc>-1){
+                if(tarEo<256)a8[z]=56,a8[z+1]=mtc+32,a8[z+2]=tarEo,z+=3;
+                else if(z%2===0)a8[z]=57,a8[z+1]=mtc+32,a16[(z+2)/2]=tarEo,z+=4;
+                else a8[z]=58,a16[(z+1)/2]=tarEo,a8[z+3]=mtc+32,z+=4;
+              }else{
+                a8[z++]=63;
+              }
+            }
+            break;
+          case(eoRegex.test(lnStr)):
+            const nxONm=oCnt++,nxENm=em.get(lnStr)??(em.set(lnStr,eoCnt),eoCnt++);
+            if(nxONm<256&&nxENm<256)a8[z]=64,a8[z+1]=nxONm,a8[z+2]=nxENm,z+=3;
+            else if(nxONm>256&&nxENm>256){
+              a8[z++]=67;if(z%2===1)a8[z++]=0;a16[z/2]=nxONm;a16[(z+2)/2]=nxENm;z+=4;
+            }else if(z%2===0)a8[z]=66,a8[z+1]=nxENm,a16[(z+2)/2]=nxONm,z+=4;
+            else a8[z]=65,a16[(z+1)/2]=nxONm,a8[z+3]=nxENm,z+=4;
+            lns[ln*8+5]=1; writeflg=true; lns[ln*8+6]=nxONm; lns[ln*8+7]=nxENm;
+            break;
+          case(lnStr===hyphenStr):
+            if(oTy===1)a8[z++]=50;else a[z++]=49; // RET
+            if(spine[oNm+1]===0)spine[oNm+1]=z
+            else if(spine[oNm+2]===0)spine[oNm+2]=z;
+            break;
+          case(lnStr===pagesStr):
+            const pgsOOs=oCnt-1;
+            const pgsIdx=lns[ln*8+3],pgsCnt=lns[ln*8+4],pgsEnd=pgsIdx+pgsCnt;
+            for(let k=pgsIdx;k<pgsEnd;k++)lns[k*8+5]=0,lns[k*8+6]=oCnt++,lns[k*8+7]=eNm;
+            if(pgsOOs<256){
+              if(pgsCnt<256)a8[z]=72,a8[z+1]=pgsOOs,a8[z+2]=pgsCnt,z+=3;
+              else{
+                if(z%2===0)a8[z]=75,a8[z+1]=pgsOOs,a16[(z+2)/2]=pgsCnt,z+=4;
+                else a8[z]=76,a16[(z+1)/2]=pgsCnt,a8[z+3]=pgsOOs,z+=4;
+              }
+            }else{
+              if(pgsCnt<256){
+                if(z%2===0)a8[z]=74,a8[z+1]=pgsCnt,a16[(z+2)/2]=pgsOOs;
+                else a8[z]=73,a16[(z+1)/2]=pgsOOs,a8[z+3]=pgsCnt;
+              }else{
+                a8[z++]=77;if(z%2===1)a8[z++]=0;a16[z/2]=pgsOOs;a16[(z+2)/2]=pgsCnt;z+=4;
+              }
+            }
+            lns[ln*8+5]=2;  writeflg=true;
+            break;
+          case(lnStr===timelineStr):
+            const tlOOs=oCnt-1,tlIdx=lns[ln*8+3],tlCnt=lns[ln*8+4],tlEnd=tlIdx+tlCnt;
+            let et=0;
+            if(tlOOs<256){
+              if(tlCnt<256)a8[z++]=78,z=(z+1)&~3,a8[z]=tlOOs,a8[z+2]=tlCnt,z+=2;   
+              else a8[z++]=80,z=z&~3,a8[z++]=tlOOs,a16[z*2]=tlCnt,z+=2;
+            }else{
+              if(tlCnt<256)a8[z++]=79,z=z&~3,a16[z*2]=tlOOs,z+=2,a8[z++]=tlCnt;
+              else a8[z++]=81,z=(z+3)&~3,a16[z*2]=tlOOs,z+=2,a16[z*2]=tlCnt,z+=2;
+            }
+            const stkStrt=z;
+            for(let k=tlIdx;k<tlEnd;k++){
+              lns[k*8+5]=0,lns[k*8+6]=oCnt++,lns[k*8+7]=eNm;
+              const durStr=str.substring(lns[k*8+1],lns[k*8+2]);
+              et+=Number(durStr)>0?Number(durStr):0;
+              a32[z/4]=et; z+=4;
+            }
+            lns[ln*8+5]=2;  writeflg=true;
+            break;
+          case(chkRegex.test(lnStr)):
+            if(!buildPF(lnStr,eNm,z))break;
+            const chkONm=oCnt++;  lns[ln*8+6]=chkONm; lns[ln*8+7]=eNm;
+            const ef=i+1<endIdx&&str.substring(lns[(i+1)*8+1],lns[(i+1)*8+2]===elseStr?1:0;
+            if(ef){
+              const elseONm=oCnt++;
+              if(elseONm<256)a8[z]=69,a8[z+1]=chkONm,a8[z+2]=elseONm,z+=3;
+              else a8[z++]=71,z=(z+1)&~1,a16[z*2]=chkONm,z+=2,a16[z*2]=elseONm,z+=2;
+            }else{
+              if(chkONm<256)a8[z]=68,a8[z+1]=chkONm,z+=2;
+              else a8[z++]=70,z=(z+1)&~1,a16[z*2]=chkONm;
+            }
+            writeflg=true; if(ef)lns[(i+1)*8+5]=3; // do we need to pass or..
+            break;
+          case(lnStr===elseStr): 
+            if(lns[ln*8+5]===3)lns[ln*8+5]=0,writeflg=true;
+            break;
+          case(lnStr===sourcesStr):
+            if(oTy!==1)break; // 'if in eo' only
+            if(srcStrMap.has((eNm<<16)|0))break; // only one bundle per eo
+            const srcsIdx=lns[ln*8+3],srcsCnt=lns[ln*8+4],srcsEnd=srcsIdx+srcsCnt;
+            let srcNm=0;
+            for(let k=srcsIdx;k<srcsEnd;k++){
+              const subStr=str.substring(lns[k*8+1],lns[k*8+2]);
+              const srcTy=srcMap[subStr]??-1;
+              if(srcTy>-1){
+                const catIdx=lns[k*8+3],catCnt=lns[k*8+4],catEnd=catIdx+catCnt;
+                for(let l=catIdx;l<catEnd;l++){
+                  const key=(eNm<<16)|srcNm;
+                  srcStrMap.set(key,str.substring(lns[l*8+1],lns[l*8+2]));
+                  srcTyMap.set(key,srcTy);
+                }
+              }
+            }
+        }
+        if(writeflg)lns[t*8+4]++,lns[t*8+3]--,lnMap[lns[t*8+3]]=ln;
+      }
+      // ret/final spines:
+      if(spine[oNm+1]===0)spine[oNm+1]=z;
+      if(spine[oNm+2]===0)spine[oNm+2]=z;
+      if(oTy===1)a8[z++]=47;else a[z++]=48;
+      mapIdx=lns[t*8+3],mapCnt=lns[t*8+4],endIdx=mapIdx+mapCnt; // set again for up loop
+    }
+    // mapidx etc switched to local, do again here
+    // also no more need for 0 ty check as only >0 pushed
+    for(let i=mapIdx;i<endIdx;i++){
+      lns[t*8+3]++; lns[t*8+4]--; // inc idx and dec cnt
+      // next go up into it and cont with sweep true (unless tl/pgs which are preset in case)
+    }
+    // drop here at end, with sweep false//
+  }
+  // at this point we have instrs filled from spine to numLns*3 and that to z
+  // wrap/output vm pckage
+  if(vmPool.length===0)vmPool.push([]);
+  const vm=vmPool.pop();
+  // +0:spine,+1:stk,+2:instrs,+3:8Props,+4:64Props,+5:strs,+6:em,+7:custs
+  if(emPool.length===0)emPool.push(new Map());
+  const oEm=emPool.pop(); oEm.clear();
+  for(const[k,v]of em)oEm.set(k,v);
+  vm[6]=em;
+  return vm;
+};
+
+const buildPF=(str,eoNum,z)=>{
+  const intlZ=z;
+  for(let i=0;i<str.length;i++){ // tokenize infix
+    switch(str[i]){
+      case '+':a8[z++]=0;break;
+      case '-':a8[z++]=1;break;
+      case '*':a8[z++]=2;break;
+      case '/':a8[z++]=3;break;
+      case '%':a8[z++]=4;break;
+      case '^':a8[z++]=5;break;
+      case '=':a8[z++]=7;break;
+    }
+  }
+  let p=2 // prevCat (cats: 2=strts, 1=solids, 0=ops)
+  let k=z; // dpt stk iterator
+  lp:for(let i=intlZ;i<z;i++){
+    switch(a8[i]){
+      case 0:case 2:case 3:case 4:case 5:case 7:
+        if(p!==1){z=i;break lp;}p=0;break;
+      case 1:if(p!==1)a8[i]=6;p=0;break; // aka unary if not op
+      case 6:break; // dud case as only set in sec sweep
+
+    }
+  }
+  a8[z++]=49; // push break instr
+  k=z; // now the shunting yard stk iterator
+  z=intlZ; // z instr iterator again, just overwriting
+  while(true){
+    const v=a8[z];
+    switch(v){
+      case 0:case 1:case 2:case 3:case 4:case 6:case 7:case 8:case 9:
+      case 10:case 11:case 12:case 13:case 14: // ops lft assoc
+        while(prm[v]<=prm[a8[k-1]])a8[z++]=a8[--k];a8[z++]=v;break;
+      case 5: // ops rght assoc
+        while(prm[v]<prm[a8[k-1]])a8[z++]=a8[--k];a8[z++]=v;break;
+      case 15:case 16:case 17:case 18:case 19:case 20:case 21:case 22:
+      case 45 a8[z++]=v;break; // funcs and para start
+      case 23: while(a8[k-1]!==45)a1[z++]=a8[--k];k--; // para end
+        if(a8[k-1]>14&&a8[k-1]<23)a1[z++]=a8[--k];break; // hdl func
+    }
+  }
+
+
+
+};
+
+
+
+
+
+
+
+const read=()=>{
+  let i=0;
+  lp: while(true){
+    switch(a1[i]){
+      case 0: // + (nos+tos) (cat0 st)
+      case 1: // - (nos-tos)
+      case 2: // * (nos*tos)
+      case 3: // / (nos/tos)
+      case 4: // % (nos%tos)
+      case 5: // ^ (nos^tos)
+      case 6: // - (unary minus) (-tos)
+      case 7: // = (comparison) (nos=tos)
+      case 8: // != (comparison) (nos!=tos)
+      case 9: // < (comparison) (nos<tos)
+      case 10: // > (comparison) (nos>tos)
+      case 11: // <= (comparison) (nos<=tos)
+      case 12: // >= (comparison) (nos>=tos)
+      case 13: // & (comparison) (nos&tos)
+      case 14: // | (comparison) (nos|tos)
+      case 15: // cos (func)
+      case 16: // sin (func)
+      case 17: // tan (func)
+      case 18: // abs (func)
+      case 19: // sqrt (func)
+      case 20: // min (func)
+      case 21: // max (func)
+      case 22: // mod (func)
+      case 23: // paraEnd in infix (needs reuse) (cat1 st)
+      case 24: // 64 glb (idx in +0)
+      case 25: // 8 glb (idx in +0)
+      case 26: // instr glb (idx in +0)
+      case 27: // read num hard 0  
+      case 28: // read num hard 1  
+      case 29: // read num 2dec from +0 (-1.28 to 1.27)  
+      case 30: // read num 1dec from +0 (-12.8 to 12.7)  
+      case 31: // read num int from +0 (-128 to 127)  
+      case 32: // read num 4dec from padded +0/+1 (-3.2768 to 3.2767)  
+      case 33: // read num 3dec from padded +0/+1 (-32.768 to 32.767)  
+      case 34: // read num 2dec from padded +0/+1 (-327.68 to 327.67)  
+      case 35: // read num 1dec from padded +0/+1 (-3276.8 to 3276.7)  
+      case 36: // read num int from padded +0/+1 (-32768 to 32767) 
+      case 37: // read num inline padded 32 float  
+      case 38: // read num inline padded 64 float
+      case 39: // read loc prop 8b (idx in +0)
+      case 40: // read loc prop 64b (idx in +0)
+      case 41: // read ext prop 8b (idx in +0, eoNm in +1)
+      case 42: // read ext prop 8b (idx in +0, eoNm in +1/+2)
+      case 43: // read ext prop 8b (eoNm in +0/+1, idx in +3)
+      case 44: // read ext prop 64b (idx in +0, eoNm in +1)
+      case 45: // read ext prop 64b (idx in +0, eoNm in padded +1/+2)
+      case 46: // read ext prop 64b (eoNm in +0/+1, idx in +3)
+      case 47: // paraSt in infix (needs reuse) (cat2 st)
+      case 48: // comma in infix (needs reuse)
+      case 49: // RET (also no cat here/hereon,break in shunting yard)
+      case 50: // eoRET
+        // type props:
+      case 51: // loc write 8b prop (idx in +0)
+      case 52: // loc write 64b prop (idx in +0)
+      case 53: // write ext prop 8b (idx in +0, eoNm in +1)
+      case 54: // write ext prop 8b (idx in +0, eoNm in +1/+2)
+      case 55: // write ext prop 8b (eoNm in +0/+1, idx in +3)
+      case 56: // write ext prop 64b (idx in +0, eoNm in +1)
+      case 57: // write ext prop 64b (idx in +0, eoNm in +1/+2)
+      case 58: // write ext prop 64b (eoNm in +0/+1, idx in +3)
+      case 59: // loc color write (+0/+1/+2)
+      case 60: // ext color write (eNm +0, rgb +1/+2/+3)
+      case 61: // ext color write (eNm +0/+1, rgb +2/+3/+4)
+      case 62: // ext color write (rgb +0/+1/+2, eNm +3/+4)
+      case 63: // empty pop (aka for invalid write)
+        // type eventObjs:
+      case 64: // CALL o in +0 and eo in +1
+      case 65: // CALL o in +0/+1 and eo in +2
+      case 66: // CALL eo in +0 and o in +1/+2
+      case 67: // CALL o in padded +0/+1 and eo in +2/+3
+        // type chks:
+      case 68: // call o in +0 if stkPop!=0
+      case 69: // call o in +0 if stkPop!=0 else o in +1
+      case 70: // call o in padded +0/+1 if stkPop!=0
+      case 71: // call o in padded +0/+1 if stkPop!=0 else o in +2/+3
+        // type pgs
+      case 72: // oOs +0, cnt +1
+      case 73: // oOs +0/+1, cnt +2
+      case 74: // cnt +0, oOs +0/+1
+      case 75: // oOs +0, cnt +1/+2
+      case 76: // cnt +0/+1, oOs +2
+      case 77: // oOs padded +0/+1, cnt +2/+3
+        // types tls
+      case 78: // padTo4-2, oOs +0, cnt +1, ...ets32flts
+      case 79: // padTo4-3, oOs +0/+1, cnt +2, ...ets32flts
+      case 80: // padTo4-3, oOs +0, cnt +1/+2, ...ets32flts
+      case 81: // padTo4-4, oOs +0/+1, cnt +2/+3, ...ets32flts
+      case 82:case 83:case 84:case 85:case 86:case 87:case 88:case 89:
+      case 90:case 91:case 92:case 93:case 94:case 95:case 96:case 97:case 98:
+      case 99:case 100:case 101:case 102:case 103:case 104:case 105:case 106:case 107:
+      case 108:case 109:case 110:case 111:case 112:case 113:case 114:case 115:case 116:
+      case 117:case 118:case 119:case 120:case 121:case 122:case 123:case 124:case 125:
+      case 126:case 127:case 128:case 129:case 130:case 131:case 132:case 133:case 134:
+      case 135:case 136:case 137:case 138:case 139:case 140:case 141:case 142:case 143:
+      case 144:case 145:case 146:case 147:case 148:case 149:case 150:case 151:case 152:
+      case 153:case 154:case 155:case 156:case 157:case 158:case 159:case 160:case 161:
+      case 162:case 163:case 164:case 165:case 166:case 167:case 168:case 169:case 170:
+      case 171:case 172:case 173:case 174:case 175:case 176:case 177:case 178:case 179:
+      case 180:case 181:case 182:case 183:case 184:case 185:case 186:case 187:case 188:
+      case 189:case 190:case 191:case 192:case 193:case 194:case 195:case 196:case 197:
+      case 198:case 199:case 200:case 201:case 202:case 203:case 204:case 205:case 206:
+      case 207:case 208:case 209:case 210:case 211:case 212:case 213:case 214:case 215:
+      case 216:case 217:case 218:case 219:case 220:case 221:case 222:case 223:case 224:
+      case 225:case 226:case 227:case 228:case 229:case 230:case 231:case 232:case 233:
+      case 234:case 235:case 236:case 237:case 238:case 239:case 240:case 241:case 242:
+      case 243:case 244:case 245:case 246:case 247:case 248:case 249:case 250:case 251:
+      case 252:case 253:case 254:case 255:break lp; // endScr
+        // can pad spare instrs at end with inline nums, maths glbls
+        // dbled ops, or inline eo props
+    }
+  }
+
+  // working out draw process verbally here so can remove par as prop:
+  // it's as simple as just pushing eoNm into draw stk on stepup, not stepdwn
+  // doesn't mean draw yet, just go through it at end
+  // also means easy z handling as you just change call order,shouldnt need the prop
+
+  // as on phone note also a 'down' command, aka implied up, use eo+1 so eo is the drop
+
+  // srcs note:
+  //
+  // on read, use a map
+  // eo num from top of stack
+  // get hybrid key of eonum and src and see if exists
+  // else check offset+len in typed arr to see if valid
+  // else do same with parent up to root
+  // when/if valid, get str, copy ref to bmp etc or make new node. put in map
+  // use the typed arr for the type
+  // the offset + srcNum gets the string and the type from the big list
+};
+
+
+
+
+
+
+
+
+
+</script>
