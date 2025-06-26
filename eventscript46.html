@@ -5,15 +5,21 @@ const a=new ArrayBuffer(8192);
 const a8=new Uint8Array(a),a16=Uint16Array(a);
 const a8s=new Int8Array(a),a16s=new Int16Array(a);
 const a32=new Float32Array(a),a64=new Float64Array(a);
-const em=new Map(),srcStrMap=new Map(),srcTyMap=new Map();
-const arrPool=[],emPool=[];
+const vmPool=[],mapPool=[],curElesPool=[];
 const srcMap={images:0,texts:1,sounds:2,videos:3,scripts:4};
 const allowedColors=/^(?!.*rgba)(?!.*#.{8,}).*$/;
+let pfFlg=false,pfMax=0;
 
 
 const cmpScr=(str)=>{
-  let oCnt=1,eCnt=1,mxDpt=0,z=0; // z 16b it, later becomes 8
-  em.clear(); em.set('#root',0); srcStrMap.clear(),srcTyMap.clear();
+  let oCnt=1,eCnt=1,mxDpt=0,z=0; // z 16b it, later 8
+  pfFlg=false,pfMax=0;
+  while(mapPool.length<4)mapPool.push(new Map());
+  const srcStrMap=mapPool.pop(); srcStrMap.clear();
+  const srcTyMap=mapPool.pop(); srcTyMap.clear();
+  const em=mapPool.pop(); em.clear();
+  const cstms=mapPool.pop(); cstms.clear();
+  em.clear(); em.set('#root',0);;
   // lns: dpt(becomes par),stCh,enCh,mpIdx,mpCnt,ty,oNm,eNm
   a16.set([0,0,0,0,0,1,0,0],z);z+=8; // manual root evObj
   // parse lns:
@@ -45,19 +51,22 @@ const cmpScr=(str)=>{
   }
   // filled lnMap, onto setting the instructions
   // tys: 0:up,1:upEo,2:upPgs/Tl(aka sweep=false),3:validates else and switches to 0
-  j=1,z*=2; // bStk iterator back to root, z switched 16b->8b
+  j=1,z*=2;  // bStk iterator back to root, z switched 16b->8b
+  const instrsStrt=z; // for later cut
   a8[z]=64,a8[z+1]=0,a8[z+2]=0,a[z+3]=255; z+=4; // fund instrs
   let sweep=true;
   lp:while(j>0){
     if(sweep){
       const t=bStk[j-1],mapIdx=lns[t*8+3],mapCnt=lns[t*8+4],endIdx=mapIdx+mapCnt;
-      const oTy=lns[t*8+5],oNm=lns[t*8+6],eNm=lns[t*8+7]; spine[oNm]=z; lns[t*8+4]=0;
+      const oTy=lns[t*8+5],oNm=lns[t*8+6],eNm=lns[t*8+7]; spine[oNm]=z; 
+      lns[t*8+4]=0; // cnt to 0
       for(let i=mapIdx;i<endIdx;i++){
         const ln=lnMap[i],lnStr=str.substring(lns[ln*8+1],lns[ln*8+2]); let writeFlg=false;
-        switch(lnStr){
-          case(propRegex.test(lnStr)):
+        switch(true){
+          case propRegex.test(lnStr):
             const locSpIdx=lnStr.indexOf(' '),locProp=lnStr.substring(0,locSpIdx);
-            const locExpr=lnStr.substring(locSpIdx+1); if(!buildPF(locExpr,eNm,z))break;
+            const locExpr=lnStr.substring(locSpIdx+1);
+            buildPF(locExpr,eNm,z); if(!pfFlg)break;
             if(locProp===colorStr){
               if(allowedColors.test(locExpr))colorTestDiv.style.color=locExpr;
               const cs=getComputedStyle(colorTestDiv).color;
@@ -75,14 +84,14 @@ const cmpScr=(str)=>{
               if(mtc>-1)a8[z]=52,a8[z+1]=mtc+32,z+=2;else a8[z++]=63;
             }
             break;
-          case(extPropRegex.test(lnStr)):
+          case extPropRegex.test(lnStr):
             const extSpIdx=lnStr.indexOf(' ');
             const extPropAndEo=lnStr.substring(0,extSpIdx);
             const extExpr=lnStr.substring(extSpIdx+1)
             const dotIdx=extPropAndEo.indexOf('.');
             const tarEo=Number(extPropAndEo.slice(0,dotIdx));
             const extProp=extPropAndEo.slice(dotIdx+1);
-            if(tarEo<0||tarEo>eoCnt-1||!buildPF(extExpr,eNm,z))break;
+            if(tarEo<0||tarEo>eoCnt-1)break; buildPF(extExpr,eNm,z); if(!pfFlg)break;
             if(extProp===colorStr){
               if(allowedColors.test(locExpr))colorTestDiv.style.color=extExpr;
               const cs=getComputedStyle(colorTestDiv).color;
@@ -115,7 +124,7 @@ const cmpScr=(str)=>{
               }
             }
             break;
-          case(eoRegex.test(lnStr)):
+          case eoRegex.test(lnStr):
             const nxONm=oCnt++,nxENm=em.get(lnStr)??(em.set(lnStr,eoCnt),eoCnt++);
             if(nxONm<256&&nxENm<256)a8[z]=64,a8[z+1]=nxONm,a8[z+2]=nxENm,z+=3;
             else if(nxONm>256&&nxENm>256){
@@ -124,12 +133,12 @@ const cmpScr=(str)=>{
             else a8[z]=65,a16[(z+1)/2]=nxONm,a8[z+3]=nxENm,z+=4;
             lns[ln*8+5]=1; writeflg=true; lns[ln*8+6]=nxONm; lns[ln*8+7]=nxENm;
             break;
-          case(lnStr===hyphenStr):
+          case lnStr===hyphenStr:
             if(oTy===1)a8[z++]=50;else a[z++]=49; // RET
             if(spine[oNm+1]===0)spine[oNm+1]=z
             else if(spine[oNm+2]===0)spine[oNm+2]=z;
             break;
-          case(lnStr===pagesStr):
+          case lnStr===pagesStr:
             const pgsOOs=oCnt-1;
             const pgsIdx=lns[ln*8+3],pgsCnt=lns[ln*8+4],pgsEnd=pgsIdx+pgsCnt;
             for(let k=pgsIdx;k<pgsEnd;k++)lns[k*8+5]=0,lns[k*8+6]=oCnt++,lns[k*8+7]=eNm;
@@ -149,7 +158,7 @@ const cmpScr=(str)=>{
             }
             lns[ln*8+5]=2;  writeflg=true;
             break;
-          case(lnStr===timelineStr):
+          case lnStr===timelineStr:
             const tlOOs=oCnt-1,tlIdx=lns[ln*8+3],tlCnt=lns[ln*8+4],tlEnd=tlIdx+tlCnt;
             let et=0;
             if(tlOOs<256){
@@ -168,8 +177,8 @@ const cmpScr=(str)=>{
             }
             lns[ln*8+5]=2;  writeflg=true;
             break;
-          case(chkRegex.test(lnStr)):
-            if(!buildPF(lnStr,eNm,z))break;
+          case chkRegex.test(lnStr):
+            buildPF(lnStr,eNm,z); if(!pfFlg)break;
             const chkONm=oCnt++;  lns[ln*8+6]=chkONm; lns[ln*8+7]=eNm;
             const ef=i+1<endIdx&&str.substring(lns[(i+1)*8+1],lns[(i+1)*8+2]===elseStr?1:0;
             if(ef){
@@ -182,10 +191,10 @@ const cmpScr=(str)=>{
             }
             writeflg=true; if(ef)lns[(i+1)*8+5]=3; // do we need to pass or..
             break;
-          case(lnStr===elseStr): 
+          case lnStr===elseStr: 
             if(lns[ln*8+5]===3)lns[ln*8+5]=0,writeflg=true;
             break;
-          case(lnStr===sourcesStr):
+          case lnStr===sourcesStr:
             if(oTy!==1)break; // 'if in eo' only
             if(srcStrMap.has((eNm<<16)|0))break; // only one bundle per eo
             const srcsIdx=lns[ln*8+3],srcsCnt=lns[ln*8+4],srcsEnd=srcsIdx+srcsCnt;
@@ -203,35 +212,39 @@ const cmpScr=(str)=>{
               }
             }
         }
-        if(writeflg)lns[t*8+4]++,lns[t*8+3]--,lnMap[lns[t*8+3]]=ln;
+        if(writeflg)lnMap[lns[t*8+3]+lns[t*8+4]++]=ln; // idx+cnt++ to ln
       }
       // ret/final spines:
       if(spine[oNm+1]===0)spine[oNm+1]=z;
       if(spine[oNm+2]===0)spine[oNm+2]=z;
-      if(oTy===1)a8[z++]=47;else a[z++]=48;
-      mapIdx=lns[t*8+3],mapCnt=lns[t*8+4],endIdx=mapIdx+mapCnt; // set again for up loop
+      if(oTy===1)a8[z++]=50;else a[z++]=49;
     }
-    // mapidx etc switched to local, do again here
-    // also no more need for 0 ty check as only >0 pushed
-    for(let i=mapIdx;i<endIdx;i++){
-      lns[t*8+3]++; lns[t*8+4]--; // inc idx and dec cnt
-      // next go up into it and cont with sweep true (unless tl/pgs which are preset in case)
+    const mapIdx=lns[t*8+3],mapCnt=lns[t*8+4];
+    if(mapCnt>0){
+      const nxt=lnMap[mapIdx]; bStk[j++]=nxt;
+      lns[t*8+3]++; lns[t*8+4]--;
+      if(lns[nxt*8+5]===2)sweep=false;else sweep=true; continue; // to nxt
     }
-    // drop here at end, with sweep false//
+    sweep=false; j--; continue; // dropdown stk if still here =
   }
-  // at this point we have instrs filled from spine to numLns*3 and that to z
   // wrap/output vm pckage
-  if(vmPool.length===0)vmPool.push([]);
-  const vm=vmPool.pop();
-  // +0:spine,+1:stk,+2:instrs,+3:8Props,+4:64Props,+5:strs,+6:em,+7:custs
-  if(emPool.length===0)emPool.push(new Map());
-  const oEm=emPool.pop(); oEm.clear();
-  for(const[k,v]of em)oEm.set(k,v);
-  vm[6]=em;
+  // main thread should use a pure glb buffer (just windows that ref it)
+  // package output should be only for scr within scrs/scrs as srcs
+  // +0:spine,+1:stk,+2:instrs,+3:8Props,+4:64Props,+5:curKeys
+  // +6:curEles,+7:srcStrMap,+8:srcTyMap,+9:em,+10:cstms
+  if(vmPool.length===0)vmPool.push([]); const vm=vmPool.pop();
+  if(curElesPool.length===0)curElesPool.push([]); 
+  const curEles=curElesPool.pop(); curEles.length=eoCnt;
+  vm[0]=new Uint16Array(spine.slice(0,eCnt*3)); vm[1]=new Float64Array(pfMax);
+  vm[2]=new Uint8Array(a8.slice(instrsStrt,z)); vm[3]=new Uint8Array(eCnt*97);
+  vm[4]=new Float64Array(eCnt*36); vm[5]=new Uint32Array(eCnt);
+  vm[6]=curEles; vm[7]=srcStrMap; vm[8]=srcTyMap; vm[9]=em; vm[10]=cstms;
+  for(let i=0;i<eCnt;i++)vm[4].set(defs,i*36); // def 64b values
   return vm;
 };
 
 const buildPF=(str,eoNum,z)=>{
+  // for pf max stk size, inc with operand and decrate with op, track max size, set to glb
   const intlZ=z;
   for(let i=0;i<str.length;i++){ // tokenize infix
     switch(str[i]){
@@ -272,9 +285,6 @@ const buildPF=(str,eoNum,z)=>{
         if(a8[k-1]>14&&a8[k-1]<23)a1[z++]=a8[--k];break; // hdl func
     }
   }
-
-
-
 };
 
 
