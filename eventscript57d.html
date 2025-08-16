@@ -1376,6 +1376,7 @@ const canvOS=(e)=>{
 
 // one-finger drag, two-finger zoom (glb set on tchdwn)
 const canvTch=(e)=>{
+  e.preventDefault();
   let has0,has1;
   for(let i=0;i<e.touches.length;i++){
     const tch=e.touches[i],id=tch.identifier;
