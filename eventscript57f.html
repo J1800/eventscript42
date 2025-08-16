@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>EventScript57</title>
+  <link rel="icon" href="appIcon.png" sizes="180x180">
+  <link rel="apple-touch-icon" href="appIcon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="EventScript57">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    html{overscroll-behavior:none}
+    body{--r:75;background:black;/**/margin:0}
+    #canv{background-color:black;outline:none;pointer-events:none;position:fixed;touch-action:none}
+    #codeWriter{background-color:#1d1919;border:none;border-radius:0;/**/box-shadow:12px 12px #000010;color:#abb3b2;font-size:14px;font-family:monospace;outline:none;pointer-events:none;position:absolute;resize:none;scrollbar-color:#5a5a5a transparent;touch-action:none;white-space:pre}
+    #consInp{background-color:navy;border:none;/**/border-radius:0;/**/bottom:28px;color:#576dba;font-family:monospace;font-size:16px;outline:none;pointer-events:none;position:absolute;right:28px;top:calc(100% - 48px);touch-action:none}
+    #consSelect{bottom:0;position:absolute;right:0;}
+    #consoleDiv{background-color:#0d0a42;bottom:70px;color:#52688e;box-shadow:12px 12px #000010;display:flex;flex-direction:column;font-family:monospace;font-size:12px;justify-content:flex-end;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;pointer-events:none;position:absolute;right:28px;scrollbar-color:#4d63b0 transparent;scroll-behavior:smooth;touch-action:none;word-wrap:break-word}
+    .consoleLn{cursor:default}
+    #curtain{position:absolute;background:#6178ad}
+    #cwSelect{position:absolute}
+    #dropShadow{background:#000010;bottom:16px;position:absolute;right:16px;top:calc(100% - 36px)}
+    #workspace{background:#25458F;bottom:0;position:fixed;right:0;}
+    @keyframes colorFade{0%{background-color:#a88f05}100%{background-color:#6b7dc6}}
+    @media(orientation:landscape){
+      #canv{height:100dvh;width:calc(var(--r) * 1dvw)}
+      #codeWriter{bottom:calc(35% + 28px);left:24px;right:28px;top:16px}
+      #consInp{left:calc(24px + 44px)}
+      #consoleDiv{left:24px;top:calc(65% + 16px)}
+      #consSelect{left:8px;top:65%}
+      #curtain{height:100dvh;width:8px}
+      #cwSelect{bottom:35%;left:8px;right:0;top:0}
+      #dropShadow{left:calc(24px + 44px + 12px)}
+      #workspace{left:calc(var(--r) * 1dvw);top:0}
+    }
+    @media(orientation:portrait){
+      #canv{height:calc(var(--r) * 1dvh);width:100dvw}
+      #codeWriter{bottom:28px;left:16px;right:calc(35% + 28px);top:24px}
+      #consInp{left:calc(65% + 16px + 44px)}
+      #consoleDiv{left:calc(65% + 16px);top:24px}
+      #consSelect{bottom:0;left:65%;top:8px}
+      #curtain{height:8px;width:100dvw}
+      #cwSelect{bottom:0;left:0;right:35%;top:8px}
+      #dropShadow{left:calc(65% + 16px + 44px + 12px)}
+      #workspace{left:0;top:calc(var(--r) * 1dvh)}
+    }
+    @media(any-hover:hover){
+      .consoleLn:hover{background:#6b7dc6;color:navy}
+    }
+  </style>
+</head>
+<body onload="onLoad()" tabindex="-1">
+<canvas id="canv" tabindex="-1"></canvas>
+<div id="workspace">
+  <div id="cwSelect"></div><div id="consSelect"></div><div id="curtain"></div>
+  <textarea id="codeWriter" spellcheck="false" autocapitalize="none" autocorrect="off"></textarea>
+  <div id="consoleDiv"></div><div id="dropShadow"></div>
+  <input id="consInp" spellcheck="false" autocapitalize="none" autocorrect="off" value=">">
+</div>
+<script>
+
+// using html elements for img/snd/vid, and two custom classes for txt/scrs
+class txtEle{
+  constructor(){this.str='';}
+  set src(v){
+    fetch(v)
+      .then(r=>r.text())
+      .then(t=>this.str=t)
+      .catch(()=>this.str='');
+  }
+}
+class scrEle{
+  constructor(){this.vm=cpl('',false);}
+  set src(v){
+    fetch(v)
+      .then(r=>r.text())
+      .then(t=>this.vm=cpl(t))
+      .catch(()=>this.vm=cpl('',false));
+  }
+}
+
+// glbs
+let mBuff,sBuff,rBuff,tokMap,bScr,psClMap,psTrTbl,lns,bStk,spine,lnMap,lpClMap;
+let lpTrTbl,pfTrTbl,xMap,prm,shunt,srcTys,a8,a16,a32i,a32f,a64,b8,b16,b32i,b32f,b64; 
+let selectionState,ctx,rw,rh,ru,cx,cy,rcx,rcy,pgT,pd,animId,glbVm,arrBucket;
+let imgBucket,txtBucket,sndBucket,vidBucket,scrBucket,locFiles;
+let curR,curB,curG,ox,oy,os;
+
+// setupGlbs - run once on load
+const setupGlbs=()=>{
+
+  // dec buffers
+  mBuff=new ArrayBuffer(1048576);
+  sBuff=new ArrayBuffer(1048576);
+  rBuff=new ArrayBuffer(1048576);
+
+  // fill rBuff
+  let z=0; // fill iterator
+  spine=new Uint32Array(rBuff,z,2048*2); z+=2048*2*4; // o jmp idxes
+  lns=new Uint16Array(rBuff,z,16384); z+=32768; // str to struct, 2048*8*2
+  bStk=new Uint16Array(rBuff,z,16); z+=16*2; // buildStk
+  lnMap=new Uint16Array(rBuff,z,2048); z+=2048*2; // lns cnt-sort
+  tokMap=new Uint8Array(rBuff,z,128); z+=128; // ch->tok
+  bScr=new Uint8Array(rBuff,z,559104); z+=559104; // byteScr, (256+16+1)*2048
+  psClMap=new Uint8Array(rBuff,z,32); z+=32; // pre-sort cl map
+  psTrTbl=new Uint8Array(rBuff,z,20); z+=20; z=(z+1)&~1; // pre-sort dfa
+  lpClMap=new Uint8Array(rBuff,z,32); z+=32; // lnParse cl map
+  lpTrTbl=new Uint8Array(rBuff,z,320); z+=320; // lnParse dfa
+  pfTrTbl=new Uint8Array(rBuff,z,1056); z+=1056; // pf dfa
+  xMap=new Uint8Array(rBuff,z,896); z+=896; // x aka prop map
+  prm=new Uint8Array(rBuff,z,24); z+=24; // prec map for pf
+  shunt=new Uint8Array(rBuff,z,512); z+=512; // shunting yard
+  srcTys=new Uint8Array(rBuff,z,256); z=0; // src types
+
+  // views on buffers
+  a8=new Uint8Array(mBuff),a16=new Uint16Array(mBuff);
+  a32i=new Uint32Array(mBuff),a32f=new Float32Array(mBuff);
+  a64=new Float64Array(mBuff),b8=new Uint8Array(sBuff);
+  b16=new Uint8Array(sBuff),b32i=new Float32Array(sBuff);
+  b32f=new Float32Array(sBuff),b64=new Float64Array(sBuff);
+
+  // page-related glbs (refresh func handles dim glbs)
+  selectionState=0;
+  ctx=canv.getContext("2d",{alpha:false});
+  pgT=performance.now()*0.001;
+  pd=window.devicePixelRatio;
+  animId=null; // draw() on/off
+  twoFngrFlg=false; // used by canvTch (finger-gestures)
+  curR=128,curG=128,curB=128;
+
+  // tokMap, ch-> 5bit tok
+  // 0:' '(@),1:\n(:),2:+,3:-,4:*,5:/,6:%,7:^,8:&,9:|,10:=,11:<,12:>,
+  // 13:!,14:.,15:?,16:(,17:),18:;,19:x,20:e,21:f,22–31:0–9
+  const sym=" \n+-*/%^&|=<>!.?();xef0123456789";
+  for(let i=0;i<sym.length;i++)tokMap[sym.charCodeAt(i)]=i;
+
+  // a fudge for inline content URLs, so every other letter maps to x
+  const alt="abcdghijklmnopqrstuvwyz:";
+  for(let i=0;i<alt.length;i++)tokMap[alt.charCodeAt(i)]=19;
+
+  // pre-sort class map:
+  psClMap[0]=1; // sp
+  psClMap[1]=2; // lnBrk
+  psClMap[18]=3; // semiLnBrk
+
+  // pre-sort DFA:
+  // s0: spaceCnt (case: dpt++)
+  psTrTbl[(0<<2)|1]=0; // sp -> itself(0)
+  psTrTbl[(0<<2)|0]=1; // other -> chCnt(1)
+  psTrTbl[(0<<2)|2]=2; // lnBrk -> lnBrk(2)
+  psTrTbl[(0<<2)|3]=3; // semiLnbrk -> semiLnbrk(3)
+  // s1: chCnt (case: chCnt++)
+  psTrTbl[(1<<2)|1]=1; // sp -> itself(1)
+  psTrTbl[(1<<2)|0]=1; // other -> itself(1)
+  psTrTbl[(1<<2)|2]=2; // lnBrk -> lnBrk(2)
+  psTrTbl[(1<<2)|3]=3; // semiLnbrk -> semiLnbrk(3)
+  // s2: lnBrk (case: popLn)
+  psTrTbl[(2<<2)|1]=0; // sp -> spCnt(0)
+  psTrTbl[(2<<2)|0]=1; // other -> chCnt(1)
+  psTrTbl[(2<<2)|2]=2; // lnBrk -> itself(2)
+  psTrTbl[(2<<2)|3]=3; // semiLnbrk -> semiLnbrk(3)
+  // s3: semiLnbrk (case: popLn, no dpt reset)
+  psTrTbl[(3<<2)|1]=0; // sp -> spCnt(0)
+  psTrTbl[(3<<2)|0]=1; // other -> chCnt(1)
+  psTrTbl[(3<<2)|2]=2; // lnBrk -> lnBrk(2)
+  psTrTbl[(3<<2)|3]=3; // semiLnbrk -> itself(3)
+
+  // lnParse class map:
+  lpClMap[2]=1; // + (pgs)
+  lpClMap[3]=2; // - (split)
+  lpClMap[7]=3; // ^ (srcs)
+  lpClMap[10]=4; // = (tl)
+  lpClMap[15]=5; // ? (chk)
+  lpClMap[19]=6; // x (loc/ext-x)
+  lpClMap[20]=7; // e (eo/ext-e)
+  lpClMap[1]=8; lpClMap[18]=8; // lnbrks
+  for(let i=22;i<33;i++)lpClMap[i]=9; // digs (locProp/extProp/eo)
+
+  // lnParse DFA:
+  // s0: start/inval brk (case: break outer)
+  lpTrTbl[(0<<4)|1]=1; // plus->pgs?(1)
+  lpTrTbl[(0<<4)|2]=3; // hyphen->split?(3)
+  lpTrTbl[(0<<4)|3]=5; // exp->srcs?(5)
+  lpTrTbl[(0<<4)|4]=7; // eq->tl?(7)
+  lpTrTbl[(0<<4)|5]=9; // qm->chk?(9)
+  lpTrTbl[(0<<4)|6]=11; // x->locWr?(11)
+  lpTrTbl[(0<<4)|7]=14; // e->eoOrExtWr?(14)
+  // s1: pgs? (case: none)
+  lpTrTbl[(1<<4)|8]=2; // lnBrk->pgs(2)
+  // s2: pgs (case: push pgs, break outer)
+  // s3: split? (case: none)
+  lpTrTbl[(3<<4)|8]=4; // lnBrk->split(4)
+  // s4: split (case: push split, break outer)
+  // s5: srcs? (case: none)
+  lpTrTbl[(5<<4)|8]=6; // lnBrk->srcs(6)
+  // s6: srcs (case: push srcs, break outer)
+  // s7: tl? (case: none)
+  lpTrTbl[(7<<4)|8]=8; // lnBrk->tl(8)
+  // s8: tl (case: push tl, break outer)
+  // s9: chk? (case: none)
+  lpTrTbl[(9<<4)|4]=10; // eq->chk(10)
+  // s10: chk (break inner, move to expr DFA)
+  // s11: locWr? (case: none)
+  lpTrTbl[(11<<4)|9]=12; // dig->locWrDig?(12)
+  // s12: locWrDig? (case: edit xTar)
+  lpTrTbl[(12<<4)|9]=12; // dig->itself(12)
+  lpTrTbl[(12<<4)|4]=13; // eq->locWr(13)
+  // s13: locWr (break inner, move to expr DFA)
+  // s14: eoOrExtWr? (case: none)
+  lpTrTbl[(14<<4)|9]=15; // dig->eoOrExtWrEDig?(15)
+  // s15: eoOrExtWrEDig? (case: edit eTar)
+  lpTrTbl[(15<<4)|9]=15; // dig->itself(15)
+  lpTrTbl[(15<<4)|8]=16; // lnBrk->eo(16)
+  lpTrTbl[(15<<4)|6]=17; // x->extWrX?(17)
+  // s16: eo (case: push eo, break outer)
+  // s17: extWrX? (case: none)
+  lpTrTbl[(17<<4)|9]=18; // dig->extWrXDig?(18)
+  // s18: extWrXDig? (case: edit xTar)
+  lpTrTbl[(18<<4)|9]=18; // dig->itself(18)
+  lpTrTbl[(18<<4)|4]=19; // eq->extWrX(19)
+  // s19: extWrX (break inner, move to expr DFA)
+
+  // pf DFA
+  // s0: start/hanging op brk (case: truncate pf, brk)
+  for(let s=0;s<16;s++)for(let t=22;t<32;t++)pfTrTbl[(s<<5)|t]=16; // digs->intDig(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|14]=27; // dot->dot(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|16]=1; // brOpenT->brOpenS(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|3]=10; // unaryT->unaryS(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|13]=11; // negateT->negateS(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|20]=25; // eT->extRead-e(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|19]=24; // xT->locRead-x(+nx14)
+  for(let s=0;s<16;s++)pfTrTbl[(s<<5)|21]=26; // f->funcF(+nx14)
+  pfTrTbl[(0<<5)|1]=32; pfTrTbl[(0<<5)|18]=32; // lnBrk->solidBrk(32)
+  // s1: openBr (case: prim, shunt)
+  // s2: add (case: shunt)
+  // s3: sub (case: shunt)
+  // s4: mul (case: shunt)
+  // s5: div (case: shunt)
+  // s6: mod (case: shunt)
+  // s7: pow (case: shunt)
+  // s8: and (case: shunt)
+  // s9: or (case:shunt)
+  // s10: neg (case: shunt)
+  // s11: not (case: shunt)
+  // s12: eqEq (case: shunt)
+  // s13: lessThanEq (case: edit tos)
+  // s14: greaterThanEq (case: edit tos)
+  // s15: notEqEq (case: shunt)
+  // s16: intDig (case: prim, lookahead)
+  for(let s=16;s<20;s++)for(let t=22;t<32;t++)pfTrTbl[(s<<5)|t]=s; // digs->self(+nx3)
+  for(let s=16;s<21;s++)for(let t=2;t<10;t++)pfTrTbl[(s<<5)|t]=t; // opT->opS(+nx4)
+  for(let s=16;s<21;s++)for(let t=10;t<14;t++)pfTrTbl[(s<<5)|t]=t+18; // dopT->dopS(+nx4)
+  for(let s=16;s<21;s++)pfTrTbl[(s<<5)|1]=32,pfTrTbl[(s<<5)|18]=32; // lnBrk->solidBrk(+nx4)
+  pfTrTbl[(16<<5)|14]=27; // dot->dot(27)
+  pfTrTbl[(16<<5)|17]=20; // )->closeBr(20)
+  // s17: fractDig (case: prim, lookahead)
+  // s18: locRead-x-dig (case: prim, lookahead)
+  // s19: extRead-x-dig (case: prim, lookahead)
+  // s20: closeBr (case: cond, prim, shunt, prim)
+  // s21: func-dig (case: prim, lookahead) 
+  for(let i=22;i<32;i++)pfTrTbl[(21<<5)|i]=21; // digs->itself(21)
+  pfTrTbl[(21<<5)|16]=1; // openBr->tself(1)
+  // s22: extRead-e-dig (case: prim)
+  for(let i=22;i<32;i++)pfTrTbl[(22<<5)|i]=22; // digs->itself(22)
+  pfTrTbl[(22<<5)|19]=23; // x->extRead-x(23)
+  // s23: extRead-x (case: none)
+  for(let i=22;i<32;i++)pfTrTbl[(23<<5)|i]=19; // digs->extRead-x-dig(19)
+  // s24 locRead-x (case: none)
+  for(let i=22;i<32;i++)pfTrTbl[(24<<5)|i]=18; // digs->locRead-x-dig(18)
+  // s25 extRead-e (case: none)
+  for(let i=22;i<32;i++)pfTrTbl[(25<<5)|i]=25; // digs->itself(25)
+  // s26: func-f (case: none)
+  for(let i=22;i<32;i++)pfTrTbl[(26<<5)|i]=21; // digs->func-dig(21)
+  // s27: dot (case: lookahead)
+  for(let i=22;i<32;i++)pfTrTbl[(27<<5)|i]=17; // digs->fractDig(17)
+  pfTrTbl[(27<<5)|1]=32,pfTrTbl[(27<<5)|18]=32; // lnBrk->solidBrk(32)
+  // s28: eq (case: none)
+  for(let s=28;s<32;s++)pfTrTbl[(s<<5)|10]=s-16; // eq->eqEq(+nx3)
+  // s29: lessThan (case: shunt)
+    for(let s=29;s<31;s++)for(let t=22;t<32;t++)pfTrTbl[(s<<5)|t]=16; // digs->intDig(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|14]=27; // dot->dot(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|16]=1; // brOpenT->brOpenS(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|3]=10; // unaryT->unaryS(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|13]=11; // negateT->negateS(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|20]=25; // eT->extRead-e(+nx1)
+    for(let s=29;s<31;s++)pfTrTbl[(s<<5)|19]=24; // xT->locRead-x(+nx1)
+  // s30: greaterThan (case: shunt)
+  // s31: notEqual (case: none)
+  // s32: solid break (case: brk)
+
+  // x-class map for ez num-> case
+  xMap.fill(0,0,32); // 32 eo props (16 used + 16 empty)
+  // 0:scale,1:left,2:top,3:width,4:height,5:opacity,6:rotate,7:red,8:green,
+  // 9:blue,10:source,11:time,12:page,13:stch,14:endch,15:fontsize
+  xMap.fill(1,32,64); // 32 eo custom props
+  xMap.fill(2,64,96); // 32 64b glbs (17 used + 15 blank
+  // dt,date,cursX,cursY,pitch,roll,yaw,ar,nw,nh,ox,oy,os,vR,vG,vB,vA
+  xMap.fill(3,96,128); // 32 custom 64b glbs
+  xMap.fill(4,128,256); // 128 8b glbs (keys/mouse, 96/128 used)
+  xMap.fill(5,256,384); // 128 custom 8b glbs
+  xMap.fill(6,384,896); // srcX
+
+  // expr prec map
+  prm.set([4,4,5,5,5,6,2,1,3,3,3,3,3,7,3,7,0,0,0,0,0,0,0,0]);
+
+  // abstracts
+  glbVm=[a8,a16,a32i,a32f,a64,[]];
+  // vm output: 8i,16i,32i,32f,64f,eles (len 6)
+
+  locFiles=Object.create(null);
+  arrBucket=[];imgBucket=[];sndBucket=[];vidBucket=[];
+  txtBucket=[];scrBucket=[];
+};
+
+// compiler, str->vm, mainFlg sets glbVm, else rets new vm
+const cpl=(str,mainFlg=true)=>{ 
+  
+  // main vs side cpl
+  let buff,c8,c16,c32i,c32f,c64,eles;
+  if(mainFlg){
+    eles=glbVm[5],eles.length=0;
+    buff=mBuff;c8=a8;c16=a16;c32i=a32i;c32f=a32f;c64=a64;
+  }else{
+    eles=arrBucket.length>0?arrBucket.pop():[];
+    buff=sBuff;c8=b8;c16=b16;c32i=b32i;c32f=b32f;c64=b64;
+  }
+
+  // tokmap, final lnbrk, root
+  let z=0; while(z<str.length)bScr[z]=tokMap[str.charCodeAt(z++)];
+  bScr[z++]=1; let y=0;
+
+  // +0:stCh>oNm,+1:enCh>eNm,+2:dpt>par>mIdx,+3:mCnt,+4:sFlg,+5:0,+6:0,+7:0
+  lns[y]=0;lns[y+1]=0;lns[y+2]=0;lns[y+3]=0; // root
+  lns[y+4]=0;lns[y+5]=0;lns[y+6]=0;lns[y+7]=0; y+=8;
+  
+  // pre-sort dfa:
+  let dpt=0,chCnt=0,state=0,brkFlg=false;
+  lp:for(let i=0;i<z;i++){
+    state=psTrTbl[(state<<2)|psClMap[bScr[i]]];
+    switch(state){
+      case 0: dpt++;break; case 1: chCnt++;break; // spCnt/chCnt
+      case 2: if(dpt>15||chCnt>255){brkFlg=true;break lp;} // lnBrk
+        lns[y]=i-chCnt;lns[y+1]=i;lns[y+2]=dpt+1;
+        lns[y+3]=0;lns[y+4]=0;lns[y+5]=0;lns[y+6]=0;lns[y+7]=0;
+        y+=8;dpt=0;chCnt=0;break;
+      case 3: if(dpt>15||chCnt>255){brkFlg=true;break lp;} // semiLnBrk
+        lns[y]=i-chCnt;lns[y+1]=i;lns[y+2]=dpt+1;
+        lns[y+3]=0;lns[y+4]=0;lns[y+5]=0;lns[y+6]=0;lns[y+7]=0;
+        y+=8;chCnt=0;break;
+    }
+  }
+
+  if(brkFlg)cOut('limit reached, script truncated');
+
+  const lnCnt=(y>>3);
+  let x=0; bStk[x++]=0; // root to stk (aka first real line = ln1)
+
+  // cnt-sort part 1
+  for(let i=1;i<lnCnt;i++){
+    while(lns[(i<<3)+2]<x)x--; const par=bStk[x-1];
+    lns[(i<<3)+2]=par; if(lns[(par<<3)+3]>255)break;
+    lns[(par<<3)+3]++; bStk[x++]=i;
+  }
+
+  // cnt-sort part 2, with manual root
+  let acc=0; lns[(0<<3)+2]=acc; acc+=lns[(0<<3)+3]; lns[(0<<3)+3]=0;
+
+  for(let i=1;i<lnCnt;i++){
+    const par=lns[(i<<3)+2],cnt=lns[(i<<3)+3];
+    lns[(i<<3)+2]=acc; acc+=cnt; lns[(i<<3)+3]=0;
+    lnMap[lns[(par<<3)+2]+lns[(par<<3)+3]++]=i;
+  }
+
+  // reusing x-buildstk, starting instr it on 68
+  x=1; let w=64,oCnt=1,maxE=0,sweep=true;
+
+  // setting root props since hasn't been through sweep
+  lns[(0<<3)+0]=0; // oNm of root
+  lns[(0<<3)+1]=0; // eTar of root
+  lns[(0<<3)+4]=2; // flg of root
+
+  // fund instrs
+  c8[w]=49;c8[w+1]=0;c8[w+2]=0;c8[w+3]=0;c8[w+4]=255;w+=5;
+
+  // main build
+  lp:while(x>0){
+    const t=bStk[x-1];
+    if(sweep){
+      const pmi=lns[(t<<3)+2],pmc=lns[(t<<3)+3],pme=pmi+pmc;
+      const pONm=lns[(t<<3)+0],pENm=lns[(t<<3)+1],pOFlg=lns[(t<<3)+4];
+      spine[pONm<<1]=w; lns[(t<<3)+3]=0; let onDrwFlg=false;
+      for(let i=pmi;i<pme;i++){
+        const ln=lnMap[i],stCh=lns[(ln<<3)+0],enCh=lns[(ln<<3)+1];
+        const omi=lns[(ln<<3)+2],omc=lns[(ln<<3)+3],ome=omi+omc;
+        let state=0,xTar=0,eTar=0,chIt=stCh,pfTy=3,sigcnt=0;
+        chSweep:while(true){
+          lnParse:while(true){
+            const tok=bScr[chIt++];
+            state=lpTrTbl[(state<<4)|lpClMap[tok]];
+            switch(state){
+              case 0: break chSweep; // start/inval brk
+              case 1: break; // pgs?
+              case 2: // pgs
+                c8[w]=52,c8[w+1]=omc,c8[w+2]=oCnt&255;c8[w+3]=oCnt>>8,w+=4;
+                for(let j=omi;j<ome;j++)lns[(j<<3)+0]=oCnt++,lns[(j<<3)+1]=pENm;
+                lns[(ln<<3)+4]=1; lnMap[lns[(t<<3)+2]+lns[(t<<3)+3]++]=ln;
+                break chSweep;
+              case 3: // split?
+                c8[w++]=pOFlg===2?42:41; // eoRET/RET
+                spine[(pONm<<1)+1]=w;
+                onDrwFlg=true;
+                break chSweep;
+              case 5: break; // srcs?
+              case 6: // srcs
+                for(let j=omi;j<ome;j++){
+                  const cLn=lnMap[j],st=lns[(cLn<<3)+0];
+                  const t0=bScr[st],t1=bScr[st+1];
+                  if(t0>21){
+                    let sTy=t0-22;
+                    if(t1>21)sTy=(sTy<<3)+(sTy<<1)+(t1-22);
+                    if(sTy>4)break chSweep;
+                    const cmi=lns[(cLn<<3)+2],cmc=lns[(cLn<<3)+3],cme=cmi+cmc;
+                    for(let k=cmi;k<cme;k++){
+                      const gLn=lnMap[k];
+                      const srcStr=str.substring(lns[(gLn<<3)+0],lns[(gLn<<3)+1]);
+                      srcTys[eles.length]=sTy;let ele;
+                      switch(sTy){  
+                        case 0:ele=imgBucket.length
+                          ?imgBucket.pop():document.createElement('img');break;
+                        case 1:ele=txtBucket.length
+                          ?txtBucket.pop():new txtEle();break;
+                        case 2:
+                          if(sndBucket.length)ele=sndBucket.pop();
+                          else ele=document.createElement('audio'),ele.loop=true;
+                          ele.src=''; ele.currentTime=0;ele.playbackRate=1;
+                          ele.volume=1;
+                          break;
+                        case 3:
+                          if(vidBucket.length)ele=vidBucket.pop();
+                          else ele=document.createElement('video'),ele.loop=true;
+                          ele.src=''; ele.currentTime=0;ele.playbackRate=1;
+                          ele.volume=1;
+                          break;
+                        case 4:ele=scrBucket.length
+                          ?scrBucket.pop():new scrEle();break;
+                      }
+                      ele.src=locFiles[srcStr]?locFiles[srcStr]:srcStr;
+                      eles.push(ele);
+                    }
+                  }
+                }
+                break chSweep;
+              case 7: break; // tl?
+              case 8: // tl
+                c8[w]=53;c8[w+1]=omc;c8[w+2]=oCnt&255;
+                c8[w+3]=oCnt>>8;w+=4;w=((w+1)&~3)-3;
+                let et=0;
+                for(let j=omi;j<ome;j++){
+                  const cLn=lnMap[j];
+                  let dur=0,intFlg=true,fracExp=0.1;
+                  let chIt=lns[(chLn<<3)+0];
+                  lns[(j<<3)+0]=oCnt++,lns[(j<<3)+1]=pENm;
+                  while(true){
+                    const t=bScr[chIt++];
+                    if(t>21){
+                      if(intFlg)dur=(dur<<3)+(dur<<1)+(t-22);
+                      else dur+=(t-22)*fracExp,fracExp*=0.1;
+                    }else if(t===14)intFlg=false;else break;
+                  }
+                  et+=dur; c32f[z>>2]=et; z+=4;
+                }
+                lns[(ln<<3)+4]=1; lnMap[lns[(t<<3)+2]+lns[(t<<3)+3]++]=ln;
+                break chSweep;
+              case 9: break; // chk?
+              case 10: pfTy=0; break lnParse; // chk
+              case 11: break; // locWr?
+              case 12: xTar=(xTar<<3)+(xTar<<1)+(tok-22); break; // locWrDig?
+              case 13: pfTy=1; break lnParse; // locWr
+              case 14: break; // eoOrExtWr?
+              case 15: eTar=(eTar<<3)+(eTar<<1)+(tok-22); break; // eoOrExtWrEDig?
+              case 16: // eos
+                eTar=eTar>255?255:eTar; if(eTar>maxE)maxE=eTar;
+                c8[w]=49; c8[w+1]=eTar; c8[w+2]=oCnt&255; c8[w+3]=oCnt>>8; w+=4;
+                lnMap[lns[(t<<3)+2]+lns[(t<<3)+3]++]=ln;
+                lns[(ln<<3)+0]=oCnt++; lns[(ln<<3)+1]=eTar; lns[(ln<<3)+4]=2;
+                break chSweep;
+              case 17: break; // extWrX?
+              case 18: eTar=(eTar<<3)+(eTar<<1)+(tok-22); break; // extWrXDig?
+              case 19: pfTy=2; break lnParse; // extWrX
+            }
+          }
+          let prim0=0,prim1=0,fracDenom=1,openBr=0,sigcnt=0,emptyFlg=true;
+          state=0; let v=0; // shunt it
+          pfParse:while(true){ 
+            const tok=bScr[chIt++]; state=pfTrTbl[(state<<5)|tok];
+            switch(state){
+              case 0: // start/trunc brk
+                while(true){
+                  if(shunt[v-1]===23){ // trunc any ((( and funcs
+                    v--;openBr--;if(shunt[v-1]>=16&&shunt[v-1]<=22)v--;
+                  }
+                  else if(shunt[v-1]===15)v--; // trunc unary minus
+                  else if(shunt[v-1]===13)v--; // trunc NOT
+                  else break;
+                }
+                v--; // trunc the hanging op (else s would be 32)
+                break pfParse;
+              case 1: shunt[v++]=23; openBr++; break; // openBr
+              case 2:case 3:case 4:case 5:case 6:case 8:case 9:
+                // add/sub/mul/div/mod/and/or
+                while(prm[shunt[v-1]]>=prm[state-2])c8[w++]=shunt[--v];
+                shunt[v++]=state-2; break;
+              case 7: // pow (right-assoc)
+                while(prm[shunt[v-1]]>prm[state-2])c8[w++]=shunt[--v];
+                shunt[v++]=state-2; break;
+              case 10: // neg (right-assoc)
+                while(prm[shunt[v-1]]>prm[15])c8[w++]=shunt[--v];
+                shunt[v++]=15; break;
+              case 11: // not (right-assoc)
+                while(prm[shunt[v-1]]>prm[7])c8[w++]=shunt[--v];
+                shunt[v++]=13; break;
+              case 12: // eq
+                while(prm[shunt[v-1]]>prm[8])c8[w++]=shunt[--v];
+                shunt[v++]=8; break;
+              case 13: shunt[v-1]=11; break;  // le
+              case 14: shunt[v-1]=12; break;  // ge
+              case 15: // notEq
+                while(prm[shunt[v-1]]>prm[14])c8[v++]=shunt[--v];
+                shunt[v++]=14; break;
+              case 16: // intDig (dropdown to 27)
+                prim0=(prim0<<3)+(prim0<<1)+(tok-22);sigcnt++;emptyFlg=false;
+              case 27: // dot
+                if(bScr[chIt]!==14&&bScr[chIt]<22){
+                  if(!prim0)c8[w++]=23;
+                  else if(prim0===1)c8[w++]=24;
+                  else if(prim0<256)
+                    c8[w]=25,c8[w+1]=prim0,w+=2;
+                  else if(prim0<65536)
+                    c8[w]=28,c8[w+1]=prim0&255,c8[w+2]=prim0>>8,w+=3;
+                  else if(prim0<16777216){
+                    c8[w++]=33;c8[w]=0;c8[w+1]=0;c8[w+2]=0;
+                    w=(w+3)&~3;c32f[w>>2]=prim0;w+=4;
+                  }else{
+                    c8[w++]=34;c8[w]=0;c8[w+1]=0;c8[w+2]=0;
+                    c8[w+3]=0;c8[w+4]=0;c8[w+5]=0;c8[w+6]=0;
+                    w=(w+7)&~7;c64[w>>3]=prim0;w+=8;
+                  }
+                  prim0=0;sigcnt=0;
+                }
+                break;
+              case 17: // fractDig
+                fracDenom*=10;prim0+=(tok-22)/fracDenom;sigcnt++;emptyFlg=false;
+                if(bScr[chIt]<22){
+                  if(fracDenom===10&&prim0<=25.5){
+                    c8[w]=26;c8[w+1]=prim0*10;w+=2;
+                  }
+                  else if(fracDenom===100&&prim0<=2.55){
+                    c8[w]=27;c8[w+1]=prim0*100;w+=2;
+                  }
+                  else if(fracDenom===10&&prim0<6553.6){
+                    const num=prim0*10;c8[w]=29;c8[w+1]=num&255;
+                    c8[w+2]=num>>8;w+=3;
+                  }else if(fracDenom===100&&prim0<655.36){
+                    const num=prim0*100;c8[w]=30;c8[w+1]=num&255;
+                    c8[w+2]=num>>8;w+=3;
+                  }else if(fracDenom===1000&&prim0<65.536){
+                    const num=prim0*1000;c8[w]=31;c8[w+1]=num&255;
+                    c8[w+2]=num>>8;w+=3;
+                  }else if(fracDenom===10000&&prim0<6.5536){
+                    const num=prim0*10000;c8[w]=32;c8[w+1]=num&255;
+                    c8[w+2]=num>>8;w+=3;
+                  }else if(sigcnt<=7){
+                    c8[w++]=33;c8[w]=0;c8[w+1]=0;c8[w+2]=0;
+                    w=(w+3)&~3;c32f[w>>2]=prim0;w+=4;
+                  }else{
+                    c8[w++]=34;c8[w]=0;c8[w+1]=0;c8[w+2]=0;
+                    c8[w+3]=0;c8[w+4]=0;c8[w+5]=0;c8[w+6]=0;
+                    w=(w+7)&~7;c64[w>>3]=prim0;w+=8;
+                  }
+                  prim0=0;fracDenom=1;sigcnt=0;
+                }
+                break;
+              case 18: // locRead-x-dig
+                prim0=(prim0<<3)+(prim0<<1)+(tok-22);
+                if(bScr[chIt]<22){
+                  prim0=prim0>895?895:prim0;
+                  switch(xMap[prim0]){
+                    case 0: case 1: // 32 innate/32 cust 64 eo props
+                      c8[w]=35;c8[w+1]=prim0;w+=2;break;
+                    case 2:case 3: // 32 innate/32 cust 64glbs
+                      c8[w]=39;c8[w+1]=prim0-64;w+=2;break;
+                    case 4:case 5: // 128 innate/128 cust 8glbs
+                      c8[w]=40;c8[w+1]=prim0-128;w+=2;break;
+                    case 6: // srcX
+                      c8[w]=36;c8[w+1]=(prim0-384)&255;
+                      c8[w+2]=(prim0-384)>>8;w+=3;break;
+                  }
+                  prim0=0;emptyFlg=false;
+                }
+                break;
+              case 19: // extRead-x-dig
+                prim1=(prim1<<3)+(prim1<<1)+(tok-22);
+                if(byteScr[chIt]<22){
+                  prim0=prim0>255?255:prim0;
+                  if(prim0>maxE)maxE=prim0;
+                  prim1=(prim1<<3)+(prim1<<1)+(tok-22);
+                  prim1=prim1>895?895:prim1;
+                  switch(xMap[prim0]){
+                    case 0:case 1: // 32 eo/32 eoCust props
+                      a8[w]=37;a8[w+1]=prim0;a8[w+2]=prim1;w+=3;break;
+                    case 2:case 3: // 32 innate/32 cust 64glbs
+                      c8[w]=39;c8[w+1]=prim0-64;w+=2;break;
+                    case 4:case 5: // 128 innate/128 cust 8glbs
+                      c8[w]=40;c8[w+1]=prim0-128;w+=2;break;
+                    case 6: // srcX
+                      c8[w]=38;c8[w+1]=prim0;c8[w+2]=(prim1-384)&255;
+                      c8[w+3]=(prim1-384)>>8;w+=4;break;
+                  }
+                  prim0=0;prim1=0;emptyFlg=false;
+                }
+                break;
+              case 20: // closeBr
+                if(openBr<1){state=32;break;} openBr--;
+                while(shunt[v-1]!==23)c8[w++]=shunt[--v];v--;
+                if(shunt[v-1]>=16&&shunt[v-1]<=22)c8[w++]=shunt[--v]; // funcs
+                break;
+              case 21: // func-dig
+                prim0=(prim0<<3)+(prim0<<1)+(tok-22);
+                if(bScr[chIt]<22){
+                  prim0=prim0>6?6:prim0;
+                  shunt[v++]=prim0+16;
+                  prim0=0;
+                }
+                break;
+              case 22: pfPrim0=(pfPrim0<<3)+(pfPrim0<<1)+(tok-22);break; // extRead-e-dig
+              case 23:case 24:case 25:case 26:break; // ext-x,loc-x,ext-e,func-f
+              // 27 (dot) uses dropdown in 16 (intDig)
+              case 28: break; // eq (first part of op)
+              case 29:case 30: // LT and GT
+                while(prm[shunt[v-1]]>=prm[state-20])c8[w++]=shunt[--v];
+                shunt[v++]=state-20; break;
+              case 31:break; // notEq (first part of op)
+              case 32:break pfParse; // operandEnd aka no truncate
+            }
+          }
+
+          // if no operand, truncated or not:
+          if(emptyFlg)break chSweep;
+
+          // close unbalanced brackets
+          while((openBr--)>0){
+            while(shunt[v-1]!==23)c8[w++]=shunt[--v];v--;
+            if(shunt[v-1]>=16&&shunt[v-1]<=22)c8[w++]=shunt[--v]; // funcs
+          }
+          while(v>0)c8[w++]=shunt[--v]; // final stk empty
+
+          // parse pf-using cmds
+          switch(pfTy){
+            case 0: // chk
+              const chkONm=oCnt++;
+              const nxLnT0=bScr[lns[(lnMap[i+1]<<3)+0]];
+              const nxLnT1=bScr[lns[(lnMap[i+1]<<3)+0]+1];
+              const elseBool=i+1<pme&&nxLnT0===9&&nxLnT1===1?1:0;
+              lnMap[lns[(t<<3)+2]+lns[(t<<3)+3]++]=ln;
+              lns[(ln<<3)+0]=chkONm;
+              lns[(ln<<3)+1]=pENm;
+              lns[(ln<<3)+4]=1;
+              if(elseBool){
+                const elseONm=oCnt++;
+                c8[w]=51;c8[w+1]=chkONm&255;c8[w+2]=chkONm>>8;
+                c8[w+3]=elseONm&255;c8[w+4]=elseONm>>8; w+=5;
+                lnMap[lns[(t<<3)+2]+lns[(t<<3)+3]++]=lnMap[i+1];
+                i++; // skipping nx since consuming the +1
+                lns[(lnMap[i+1]<<3)+0]=elseONm;
+                lns[(lnMap[i+1]<<3)+1]=pENm;
+                lns[(lnMap[i+1]<<3)+4]=1;
+              }else c8[w]=50,c8[w+1]=chkONm&255,c8[w+2]=chkONm>>8,w+=3;
+              
+              break;
+            case 1: // locWr
+              xTar=xTar>895?895:xTar;
+              switch(xMap[xTar]){
+                case 0:case 1: // 32 eo/32 eoCust props
+                  c8[w]=43;c8[w+1]=xTar;w+=2;break;
+                case 2:case 3: // 32 innate/32 cust 64glbs
+                  c8[w]=45;c8[w+1]=xTar-64;w+=2;break;
+                case 4: case 5: // 128 innate/128 cust 8glbs
+                  c8[w]=46;c8[w+1]=xTar-128;w+=2;break;
+                case 6: // srcX
+                  c8[w]=44;c8[w+1]=(xTar-384)&255;
+                  c8[w+2]=(xTar-384)>>8;w+=3;
+              }
+              break;
+            case 2: // extWr
+              xTar=xTar>895?895:xTar;
+              eTar=eTar>255?255:eTar;
+              if(eTar>=maxE)maxE=eTar;
+              switch(xMap[xTar]){
+                case 0:case 1: // 32 eo/32 eoCust props
+                  c8[w]=45;c8[w+1]=eTar;c8[w+2]=xTar;w+=3;break;
+                case 2:case 3: // 32 innate/32 cust 64glbs
+                  c8[w]=45;c8[w+1]=xTar-64;w+=2;break;
+                case 4: case 5: // 128 innate/128 cust 8glbs
+                  c8[w]=46;c8[w+1]=xTar-128;w+=2;break;
+                case 6: // srcX
+                  c8[w]=46;c8[w+1]=eTar;c8[w+1]=(xTar-384)&255;
+                  c8[w+2]=(xTar-384)>>8;w+=3;
+              }
+          }
+
+          break;
+        }
+      }
+      // ret/final spine:
+      c8[w++]=pOFlg===2?42:41; // RET/eoRet
+      if(!onDrwFlg)spine[(pONm<<1)+1]=w,c8[w++]=pOFlg===2?42:41;
+    }
+    const pmi2=lns[(t<<3)+2],pmc2=lns[(t<<3)+3];
+    if(pmc2>0){
+      const nxt=lnMap[pmi2]; bStk[x++]=nxt;
+      lns[(t<<3)+2]++; lns[(t<<3)+3]--; sweep=lns[(nxt<<3)+4]!==0;
+      continue;
+    }
+    sweep=false; x--; // drpdwn stk if still here
+  }
+
+  // buffer design:
+    // 20 bytes for 5 32int iterators:
+      // +0: instr it
+      // +1: pf/ctxStk it
+      // +2: retStk it
+      // +3: eStk it
+      // +4: drwStk it
+    // 44 bytes for 11 32int offsets:
+      // +5: pf/ctxStk off
+      // +6: props off
+      // +7: 64glbs off
+      // +8: spine off
+      // +9: retStk off
+      // +10: oSet off
+      // +11: nSet off
+      // +12: 8glbs off
+      // +13: srcTys off
+      // +14: eStk off
+      // +15: drwStk off
+    // variable bytes for actual buffer sections:
+      // instrs (variable 8ints with other types inlined)
+      // pad to 8b (variable 8ints 0-7)
+      // pf/ctxStk (64bit flts, 64*8=512 bytes)
+      // props (variable 64bit floats, maxENm*64*8 bytes)
+      // 64b glbs (64bit flts, 64*8=512 bytes)
+      // spine (variable, 32ints, 4*2*oCnt bytes)
+      // retStk (32ints, 16*4=64 bytes)
+      // oSet (32ints, 64*4=256 bytes)
+      // nSet (32ints, 64*4=256 bytes)
+      // 8glbs (variable 8ints, maxENm*256 bytes)
+      // srcTys (8ints, 256 bytes)
+      // eStk (8ints, 16 bytes)
+      // drwStk (8ints, 256*2=512 bytes)
+
+  // iterators more for show as using regs/local primitives in practice
+  
+  // just useful for vm state dumps. so starting with pad after instrs
+  c8[w]=0;c8[w+1]=0;c8[w+2]=0;c8[w+3]=0;c8[w+4]=0;
+  c8[w+5]=0;c8[w+6]=0;c8[w+7]=0;w=(w+7)&~7;
+
+  // fill zeroes ahead, most of it should be empty, and not worth being picky
+  c64.fill(0,w>>3,(w>>3)+586+oCnt+(maxE+2)<<6);
+
+  c32i[5]=w>>3; w+=1024; // pf/ctxStk off, 8byte * 256 = 2048
+  c32i[6]=w>>3; w+=(maxE+1)<<9; // props off, 8byte * 64props * eCnt = 512 * eCnt 
+  c32i[7]=w>>3; w+=512; // 64glbs off, 8byte * 64
+  c32i[8]=w>>2; w+=oCnt<<3; // spine off, 4byte * 2 * oCnt
+  c32i[9]=w>>2; w+=64; // retStk off, 4byte * 16
+  c32i[10]=w>>2; w+=1024; // oSet off, 4byte * 256 = 1024
+  c32i[11]=w>>2; w+=1024; // nSet off, 4byte * 256 = 1024
+  c32i[12]=w; w+=256; // 8glbs off, 1byte * 256 = 256
+  c32i[13]=w; w+=256; // srcTys off, 1byte * 256 = 256
+  c32i[14]=w; w+=16; // eStk, 1byte * 16 = 16
+  c32i[15]=w; w+=512; // drwStk, 1 byte * 2 * 256 = 512
+
+  // fill dflt props:
+  for(let i=0;i<=maxE;i++){
+    // 0:scale,1:left,2:top,3:width,4:height,5:opacity,6:rotate,7:red,8:green,
+    // 9:blue,10:source,11:time,12:page,13:stch,14:endch,15:fontsize
+    const o=c32i[6]+(i<<6);c64[o+0]=1;c64[o+1]=-1;c64[o+2]=-1;c64[o+3]=1;
+    c64[o+4]=1;c64[o+5]=1;c64[o+6]=0;c64[o+7]=0.5;c64[o+8]=0.5;c64[o+9]=0.5;
+    c64[o+10]=-1;c64[o+11]=0;c64[o+12]=0;c64[o+13]=0;c64[o+14]=100;c64[o+15]=0.1;
+  }
+
+  // copy over spine
+  for(let i=0;i<oCnt;i++){
+    c32i[c32i[8]+(i<<1)+0]=spine[(i<<1)+0];
+    c32i[c32i[8]+(i<<1)+1]=spine[(i<<1)+1];
+  }
+
+  // fill srcTys
+  c8.set(srcTys,c32i[13]);
+ 
+  // final pad:
+  c8[w]=0;c8[w+1]=0;c8[w+2]=0;c8[w+3]=0;c8[w+4]=0;
+  c8[w+5]=0;c8[w+6]=0;c8[w+7]=0; w=(w+7)&~7;
+
+  // vm output: 8i,16i,32i,32f,64f,eles (len 6)
+  
+  // if main, recycle components of overwritten vm
+  // if else, export fresh vm with fresh buffer
+  if(mainFlg){
+    const oldEles=glbVm[5];
+    for(let i=0;i<oldEles.length;i++){
+      switch(glbVm[0][glbVm[2][13]+i]){
+        case 0: imgBucket.push(oldEles[i]);break;
+        case 1: oldEles[i].str='';txtBucket.push(oldEles[i]);break;
+        case 2: oldEles[i].pause(); sndBucket.push(oldEles[i]);break;
+        case 3: oldEles[i].pause(); vidBucket.push(oldEles[i]);break;
+        case 4: 
+          for(let j=0;j<oldEles[i].vm[5].length;j++)oldEles.push(oldEles[i].vm[5][j]);
+          arrBucket.push(oldEles[i].vm[5]);
+          oldEles[i].vm=cpl('',false);
+          scrBucket.push(oldEles[i]);
+      }
+    }
+    for(let i=0;i<arrBucket.length;i++)arrBucket[i].length=0;
+  }else{
+    const oVm=arrBucket.length?arrBucket.pop():new Array(6);
+    const eBuff=new ArrayBuffer(w);
+    oVm[0]=new Uint8Array(eBuff); oVm[1]=new Uint16Array(eBuff);
+    oVm[2]=new Uint32Array(eBuff); oVm[3]=new Float32Array(eBuff);
+    oVm[4]=new Float64Array(eBuff); oVm[5]=eles; return oVm;
+  }
+};
+
+// runs vm, call each frame
+const read=(vm=glbVm,vmUPx=ru,vmCXPx=rcx,vmCYPx=rcy,vmOX=ox,vmOY=oy,vmOS=os)=>{
+
+  // vm output: 8i,16i,32i,32f,64f,eles (len 6)
+
+  // buffer design:
+    // 20 bytes for 5 32int iterators:
+      // +0: instr it
+      // +1: pf/ctxStk it
+      // +2: retStk it
+      // +3: eStk it
+      // +4: drwStk it
+    // 44 bytes for 11 32int offsets:
+      // +5: pf/ctxStk off
+      // +6: props off
+      // +7: 64glbs off
+      // +8: spine off
+      // +9: retStk off
+      // +10: oSet off
+      // +11: nSet off
+      // +12: 8glbs off
+      // +13: srcTys off
+      // +14: eStk off
+      // +15: drwStk off
+    // variable bytes for actual buffer sections:
+      // instrs (variable 8ints with other types inlined)
+      // pad to 8b (variable 8ints 0-7)
+      // pf/ctxStk (64bit flts, 64*8=512 bytes)
+      // props (variable 64bit floats, maxENm*64*8 bytes)
+      // 64b glbs (64bit flts, 64*8=512 bytes)
+      // spine (variable, 32ints, 4*2*oCnt bytes)
+      // retStk (32ints, 16*4=64 bytes)
+      // oSet (32ints, 64*4=256 bytes)
+      // nSet (32ints, 64*4=256 bytes)
+      // 8glbs (variable 8ints, maxENm*256 bytes)
+      // srcTys (8ints, 256 bytes)
+      // eStk (8ints, 16 bytes)
+      // drwStk (8ints, 256*2=512 bytes)
+
+  // glb64s: dt,scrT,date,cursX,cursY,pitch,roll,yaw,ar,nw,nh,vR,vG,vB,vA
+
+  // glb8s: 0-25:keyPr a-z,26-51:keyDwn a-z,52-77:keyUp a-z
+  // 78-82:mousePr0-5,83-87:mouseDwn0-5,88-92:mouseUp0-5
+
+  // 0:scale,1:left,2:top,3:width,4:height,5:opacity,6:rotate,7:red,8:green,
+  // 9:blue,10:source,11:time,12:page,13:stch,14:endch,15:fontsize
+
+  // vm components and buffer offsets
+  let z=64,y=0,x=0,w=0,v=0; // instr,pf/CtxStk,retStk,eStk,drwStk iterators
+  const v8=vm[0],v16=vm[1],v32i=vm[2],v32f=vm[3],v64=vm[4],eles=vm[5];
+  const pf=v32i[5],props=v32i[6],glbs64=v32i[7],sp=v32i[8];
+  const retStk=v32i[9],oSet=v32i[10],nSet=v32i[11],glbs8=v32i[12];
+  const srcTys=v32i[13],eStk=v32i[14],drwStk=v32i[15];
+
+  // xMap:0-63:props,64-127:glbs64,128-383:glbs8,rest:srcX
+
+  // main instr read loop
+  lp:while(true){ 
+    switch(v8[z]){
+      case 0: // nos+tos (+)
+        v64[pf+y-2]+=v64[pf+(--y)];++z;break;
+      case 1: // nos-tos (-)
+        v64[pf+y-2]-=v64[pf+(--y)];++z;break;
+      case 2: // nos*tos (*)
+        v64[pf+y-2]*=v64[pf+(--y)];++z;break;
+      case 3: // nos/tos (/)
+        v64[pf+y-2]/=v64[pf+(--y)];++z;break;
+      case 4: // nos%tos (%)
+        v64[pf+y-2]%=v64[pf+(--y)];++z;break; 
+      case 5: // nos^tos (^)
+        v64[pf+y-2]**=v64[pf+(--y)];++z;break;
+      case 6: // nos&tos (&)
+        v64[pf+y-2]=(v64[pf+y-2]!=0&&v64[pf+(--y)]!=0)?1:0;
+        ++z;break;
+      case 7: // nos|tos (|)
+        v64[pf+y-2]=(v64[pf+y-2]!=0||v64[pf+(--y)]!=0)?1:0;
+        ++z;break;
+      case 8: // nos==tos (==)
+        v64[pf+y-2]=v64[pf+y-2]==v64[pf+(--y)]?1:0;
+        ++z;break;
+      case 9: // nos<tos (<)
+        v64[pf+y-2]=v64[pf+y-2]<v64[pf+(--y)]?1:0;
+        ++z;break;
+      case 10: // nos>tos (>)
+        v64[pf+y-2]=v64[pf+y-2]>v64[pf+(--y)]?1:0;
+        ++z;break;
+      case 11: // nos<=tos (<=)
+        v64[pf+y-2]=v64[pf+y-2]<=v64[pf+(--y)]?1:0;
+        ++z;break;
+      case 12: // nos>=tos (>=)
+        v64[pf+y-2]=v64[pf+y-2]>=v64[pf+(--y)]?1:0;
+        ++z;break;
+      case 13: // !tos (!)
+        v64[pf+y-1]=!v64[pf+(--y)];++z;break;
+      case 14: // nos!=tos (!=)
+        v64[pf+y-2]=v64[pf+y-2]!=v64[pf+(--y)]?1:0;
+        z++;break;
+      case 15: // -tos (-)
+        v64[pf+y-1]=-v64[pf+y-1];++z;break;
+      case 16: // cos(tos) (f0)
+        v64[pf+y-1]=Math.cos(v64[pf+y-1]);++z;break;
+      case 17: // sin(tos) (f1)
+        v64[pf+y-1]=Math.sin(v64[pf+y-1]);++z;break;
+      case 18: // tan(tos) (f2)
+        v64[pf+y-1]=Math.tan(v64[pf+y-1]);++z;break;
+      case 19: // abs(tos) (f3)
+        v64[pf+y-1]=Math.abs(v64[pf+y-1]);++z;break;
+      case 20: // sqrt(tos) (f4)
+        v64[pf+y-1]=Math.sqrt(v64[pf+y-1]);++z;break;
+      case 21: // randInt(tos) (f5)
+        v64[pf+y-1]=Math.floor(Math.random()*v64[pf+y-1]);
+        ++z;break;
+      case 22: // randFlt(tos) (f6)
+        v64[pf+y-1]=Math.random()*v64[pf+y-1];++z;break;
+      case 23: // r-num-hard-0 (also used for openbr in shunt)
+        v64[pf+y++]=0;++z;break;
+      case 24: // r-num-hard-1
+        v64[pf+y++]=1;++z;break;
+      case 25: // r-num-1b-0dec (num:+1) (0 to 255)
+        v64[pf+y++]=v8[z+1];z+=2;break;
+      case 26: // r-num-1b-1dec (num:+1) (0 to 25.5)
+        v64[pf+y++]=v8[z+1]*0.1;z+=2;break;
+      case 27: // r-num-1b-2dec (num:+1) (0 to 2.55)
+        v64[pf+y++]=v8[z+1]*0.01;z+=2;break;
+      case 28: // r-num-2b-0dec (num:+1/+2) (0 to 65535)
+        v64[pf+y++]=(v8[z+1])|((v8[z+2])<<8);z+=3;break;
+      case 29: // r-num-2b-1dec (num:+1/+2) (0 to 6553.5)
+        v64[pf+y++]=((v8[z+1])|((v8[z+2])<<8))*1e-1;z+=3;break;
+      case 30: // r-num-2b-2dec (num:+1/+2) (0 to 655.35)
+        v64[pf+y++]=((v8[z+1])|((v8[z+2])<<8))*1e-2;z+=3;break;
+      case 31: // r-num-2b-3dec (num:+1/+2) (0 to 65.535)
+        v64[pf+y++]=((v8[z+1])|((v8[z+2])<<8))*1e-3;z+=3;break;
+      case 32: // r-num-2b-4dec (num:+1/+2) (0 to 6.5535)
+        v64[pf+y++]=((v8[z+1])|((v8[z+2])<<8))*1e-4;z+=3;break;
+      case 33: // r-num-32flt (num:+1/+2/+3/+4) (with pad)
+        z=(z+3)&~3;v64[pf+y++]=v32f[z>>2];z+=4;break;
+      case 34: // r-num-64flt (num:+1/+2/+3/+4/+5/+6/+7/+8) (with pad)
+        z=(z+7)&~7;v64[pf+y++]=v64[z>>3];z+=8;break;
+      case 35: // r-loc-prop (idx:+1)
+        v64[pf+y++]=v64[props+((v8[eStk+w-1])<<6)+v8[z+1]];
+        z+=2;break
+      case 36: // read-loc-srcX (tar:+1/+2)
+        //nw=ele.width>ele.height?ele.width/ele.height:1
+        //nh=ele.videoWidth>ele.videoHeight?ele.videoWidth/ele.videoHeight:1
+        // 0 dflt return... (for sqr while loading just use srx|1 in scr)
+        const srcNm=v64[props+((v8[eStk+w-1])<<6)+10];
+        if(srcNm<0||srcNm>eles.length-1){v64[pf+y++]=0;break;}
+        const tar=v8[z+1]|(v8[z+2]<<8);
+        switch(v8[srcTys+srcNm]){
+          case 0: // imgs. read 0:w, 1: h. then nw/nh, inw/inh? ar? inv ar?
+          case 1: // txts, read char at tar
+          case 2:case 5:case 6: // snds, read idk, vol/time/rate?
+            // well res first two for nw/nh like vid
+            // and obv this needs a trTble...
+            let output=0;
+            switch(tar){
+            case 0:case 1: break; // nw/nh
+            case 2: output=eles[srcNm].currentTime;break;
+            case 3: output=eles[srcNm].playbackRate;break;
+            case 4: output=eles[srcNm].volume;break;
+            }
+            // then push var?
+          case 3: // vids. vol/time/rate?
+          case 4: // scr aka read its glbs
+        }
+        break;
+      case 37: // r-ext-prop (eNm:+1,idx:+2)
+        v64[pf+y++]=v64[props+(v8[z+1]<<6)+v8[z+2]];z+=3;break;
+      case 38: // read-ext-srcX (eNm:+1,tar:+2/+3)
+        break;
+       case 39: // r-64glb (idx:+1)
+        v64[pf+y++]=v64[glbs64+v8[z+1]];z+=2;break; 
+      case 40: // r-8glb (idx:+1)
+        v64[pf+y++]=v8[glbs8+v8[z+1]];z+=2;break;
+      case 41: // ret
+        z=v32i[retStk+(--x)];break;
+      case 42: // eoRet
+        z=v32i[retStk+(--x)];
+        --w;
+        break;
+      case 43: // w-loc (idx:+1)
+        v64[props+((v8[eStk+(w-1)])<<6)+v8[z+1]]=v64[pf+(--y)];
+        z+=2;break;
+      case 44: // wr-loc-srcX (tar:+1/+2 ///
+        break;
+      case 45: // wr-ext-prop (eNm:+1,idx:+2)
+        v64[props+(v8[z+1]<<6)+v8[z+2]]=v64[pf+(--y)];z+=3;break;
+      case 46: // wr-ext-srcX (eNm:+1,tar:+2/+3)
+        break;
+      case 47: // wr-64glb (idx:+1)
+        v64[glbs64+v8[z+1]]=v64[pf+(--y)];z+=2;break;
+      case 48: // wr-8glb (idx:+1)
+        v8[glbs8+v8[z+1]]=v64[pf+(--y)];z+=2;break;
+      case 49: // call eoCall (eNm:+1,oNm:+2/+3)
+        v8[drwStk+(v<<1)]=v8[z+1];v8[drwStk+(v<<1)+1]=w;++v; // drwStk/dpt
+        v32i[retStk+x++]=z+4; 
+        v8[eStk+w++]=v8[z+1];
+        const oNm49=v8[z+2]|(v8[z+3]<<8),mask49=1<<(oNm49&31); // consts
+        v32i[nSet+(oNm49>>5)]|=mask49; // set nSet
+        if(v32i[oSet+(oNm49>>5)]&mask49) // if in oSet
+          z=v32i[sp+(oNm49<<1)+1]; // onDrws
+        else z=v32i[sp+(oNm49<<1)+0]; // else onStrts
+        break;
+      case 50: // if stkPop call o (oNm:+1/+2)
+        if(!v64[pf+(--y)]){z+=3;break;} // skip oEnter if !stkPop
+        v32i[retStk+x++]=z+3; // retStk
+        const oNm50=v8[z+1]|(v8[z+2]<<8),mask50=1<<(oNm50&31); // consts
+        v32i[nSet+(oNm50>>5)]|=mask50; // set nSet
+        if(v32i[oSet+(oNm50>>5)]&mask50) // if in oSet
+          z=v32i[sp+(oNm50<<1)+1]; // onDrws
+        else z=v32i[sp+(oNm50<<1)+0]; // else onStrts
+        break;
+      case 51: // if stkPop call o, else other o (oNm1:+1/+2,oNm2:+3/+4)
+        v32i[retStk+x++]=z+5; // retStk
+        let oNm51;
+        if(v64[pf+(--y)])oNm51=v8[z+1]|(v8[z+2]<<8);
+        else oNm51=v8[z+3]|(v8[z+4]<<8);
+        const mask51=1<<(oNm51&31);
+        v32i[nSet+(oNm51>>5)]|=mask51; // set nSet
+        if(v32i[oSet+(oNm51>>5)]&mask51) // if in oSet
+          z=v32i[sp+(oNm51<<1)+1]; // onDrws
+        else z=v32i[sp+(oNm51<<1)+0]; // else onStrts
+        break;
+      case 52: // pgs (cnt:+1,oOs:+2/+3)
+        const pgsProp=v64[(v8[eStk+w-1]<<64)+12];
+        if(pgsProp>v8[z+1]||pgsProp<0){z+=4;break;}
+        const oNm52=(v8[z+2]|(v8[z+3]<<8))+pgsProp;
+        v32i[retStk+x++]=z+4+v8[z+1]; // retStk
+        const mask52=1<<(oNm52&31);
+        v32i[nSet+(oNm52>>5)]|=mask52; // set nSet
+        if(v32i[oSet+(oNm52>>5)]&mask52) // if in oSet
+          z=v32i[sp+(oNm52<<1)+1]; // onDrws
+        else z=v32i[sp+(oNm52<<1)+0]; // else onStrts
+        break;
+      case 53: // tl, cnt +1, oOs +2/+3, pad, ...ets32flts
+        const timeProp=v64[(v8[eStk+w-1]<<64)+11];
+        const startIdx=((z+3)+3)&~3;
+        let idx=-1;
+        tLp:for(let i=startIdx;i<startIdx+v8[z+1];i++){
+          const endTime=v32f[i];
+          if(endTime<timeProp)continue;
+          else{idx=i-startIdx;break tLp;}
+        }
+        if(idx=-1){z=startIdx+(v8[z+1]<<2);break;}
+        const oNm53=(v8[z+2]|(v8[z+3]<<8))+idx;
+        v32i[retStk+x++]=z+4+v8[z+1]; // retStk
+        const mask53=1<<(oNm53&31);
+        v32i[nSet+(oNm53>>5)]|=mask53; // set nSet
+        if(v32i[oSet+(oNm53>>5)]&mask53) // if in oSet
+          z=v32i[sp+(oNm53<<1)+1]; // onDrws
+        else z=v32i[sp+(oNm53<<1)+0]; // else onStrts
+        break;
+      case 54:case 55:case 56:
+      case 57:case 58:case 59:case 61:case 62:case 63:case 64:case 65:case 66: 
+      case 67:case 68:case 69:case 70:case 71:case 72:case 73:case 74:case 75:
+      case 76:case 77:case 78:case 79:case 80:case 81:case 82:case 83:case 84:
+      case 85:case 86:case 87:case 88:case 89:case 90:case 91:case 92:case 93:
+      case 94:case 95:case 96:case 97:case 98:case 99:case 100:case 101:case 102:
+      case 103:case 104:case 105:case 106:case 107:case 108:case 109:case 110:case 111:
+      case 112:case 113:case 114:case 115:case 116:case 117:case 118:case 119:case 120:
+      case 121:case 122:case 123:case 124:case 125:case 126:case 127:case 128:case 129:
+      case 130:case 131:case 132:case 133:case 134:case 135:case 136:case 137:case 138:
+      case 139:case 140:case 141:case 142:case 143:case 144:case 145:case 146:case 147:
+      case 148:case 149:case 150:case 151:case 152:case 153:case 154:case 155:case 156:
+      case 157:case 158:case 159:case 160:case 161:case 162:case 163:case 164:case 165:
+      case 166:case 167:case 168:case 169:case 170:case 171:case 172:case 173:case 174:
+      case 175:case 176:case 177:case 178:case 179:case 180:case 181:case 182:case 183:
+      case 184:case 185:case 186:case 187:case 188:case 189:case 190:case 191:case 192:
+      case 193:case 194:case 195:case 196:case 197:case 198:case 199:case 200:case 201:
+      case 202:case 203:case 204:case 205:case 206:case 207:case 208:case 209:case 210:
+      case 211:case 212:case 213:case 214:case 215:case 216:case 217:case 218:case 219:
+      case 220:case 221:case 222:case 223:case 224:case 225:case 226:case 227:case 228:
+      case 229:case 230:case 231:case 232:case 233:case 234:case 235:case 236:case 237:
+      case 238:case 239:case 240:case 241:case 242:case 243:case 244:case 245:case 246:
+      case 247:case 248:case 249:case 250:case 251:case 252:case 253:case 254:
+      case 255: break lp;
+    }
+  }
+  // draws
+  y=1; // pfStk->ctxStk
+  // ctx struct: uPx,cxPx,cyPx,wPx,hPx,lPx,tPx,0
+  // fund vals pushed in to give starting ctx
+  v64[pf+(0<<3)+0]=vmUPx*vmOS; // rend uPx (used for further derivation)
+  v64[pf+(0<<3)+1]=vmCXPx+vmOX; // rend cxPx
+  v64[pf+(0<<3)+2]=vmCYPx+vmOY; // rend cyPx
+  v64[pf+(0<<3)+3]=rw; // rend w (used for clip)
+  v64[pf+(0<<3)+4]=rh; // rend h (used for clip)
+
+  ctx.clearRect(0,0,rw,rh);
+  for(i=0;i<v;i++){
+    // get nx drw and set ctx (aka adjust for dpt)
+    const eNm=v8[drwStk+(i<<1)+0],dpt=v8[drwStk+(i<<1)+1]; y=dpt+1;
+    // convert prop vals to px vales
+    const ctxOff=pf+(y<<3),pOff=props+(eNm<<6); // ctx top/eNm prop offsets
+    const pUPx=v64[ctxOff-8],pCxPx=v64[ctxOff-7],pCyPx=v64[ctxOff-6];
+    const w=v64[pOff+3],h=v64[pOff+4],sc=v64[pOff+0];
+    const wPx=w*pUPx*sc,hPx=h*pUPx*sc,uPx=Math.min(wPx,hPx);
+    const l=v64[pOff+1],t=v64[pOff+2];
+    const lPx=pCxPx+l*(pUPx/2),tPx=pCyPx+t*(pUPx/2);
+    const cxPx=lPx+(wPx/2),cyPx=tPx+(hPx/2);
+      
+    // opacity
+    ctx.globalAlpha=v64[pOff+5];
+
+    // color fill
+    const propR=Math.max(0,Math.min(255,v64[pOff+7]*255+0.5|0));
+    const propG=Math.max(0,Math.min(255,v64[pOff+8]*255+0.5|0));
+    const propB=Math.max(0,Math.min(255,v64[pOff+9]*255+0.5|0));
+
+    // ctx reqs passing in a str so only set per frame if an actual change
+    if(propR!=curR||propG!=curG||propB!=curB){
+      curR=propR;curG=propG;curB=propB;
+      ctx.fillStyle=`rgb(${curR},${curG},${curB})`;
+    }
+
+    // clip and save ctx
+    const pWPx=v64[ctxOff-5],pHPx=v64[ctxOff-4];
+    const pLPx=v64[ctxOff-3],pTPx=v64[ctxOff-2];
+    ctx.save();ctx.beginPath();ctx.rect(pLPx,pTPx,pWPx,pHPx);ctx.clip();
+
+    // rotation
+    const rot=v64[pOff+6];
+    if(rot!==0){
+      const adjRot=rot*(2*Math.PI);
+      ctx.setTransform(
+        Math.cos(adjRot),
+        Math.sin(adjRot),
+        -Math.sin(adjRot),
+        Math.cos(adjRot),
+        cxPx-Math.cos(adjRot)*cxPx+Math.sin(adjRot)*cyPx,
+        cyPx-Math.sin(adjRot)*cxPx-Math.cos(adjRot)*cyPx
+      );
+    };
+
+    // push to ctxStk
+    v64[ctxOff]=uPx; v64[ctxOff+1]=cxPx; v64[ctxOff+2]=cyPx; 
+    v64[ctxOff+3]=wPx; v64[ctxOff+4]=hPx; v64[ctxOff+5]=lPx;
+    v64[ctxOff+6]=tPx; ++y;
+
+    // draw
+    const srcNm=v64[pOff+10];
+    if(srcNm<0||srcNm>=eles.length){
+      ctx.fillRect(lPx,tPx,wPx,hPx); ctx.restore(); continue;
+    }
+    
+    switch(v8[srcTys+srcNm]){
+      case 0: // img
+        ctx.drawImage(eles[srcNm],lPx,tPx,wPx,hPx); break;
+      case 1: // txt
+        const fs=v64[pOff+15],str=eles[srcNm].str,fsPx=fs*uPx;
+        const sCh=Math.max(0,v64[pOff+13]);
+        const eCh=Math.min(str.length,Math.max(sCh,v64[pOff+14]));
+        ctx.font=`${fsPx}px monospace`;
+        // word wrap
+        const lnW=Math.max(1,Math.floor(wPx/(fsPx/1.6664)));
+        let curStCh=sCh,curTop=0;;
+        for(let j=sCh;j<eCh;j++){
+          if(str[i]==='\n'){
+            ctx.fillText(str.slice(curStCh,j+1),lPx,tPx+curTop);
+            curStCh=j+1;curTop+=fsPx;
+          }else if(j===curStCh+lnW-1){
+            if(str[j]!==' '&&str[j+1]!==' '){
+              // aka on word:
+              const intlI=j;
+              while(str[j]!==' '&&j>curStCh)j--; // go back to first gap
+              const nxLnSt=j+1;
+              while(str[j]===' '&&j>curStCh)j--; // goto first ch after gap
+              if(j===curStCh){
+                // aka if whole line a word, just split
+                ctx.fillText(str.slice(curStCh,intlI),lPx,tPx+curTop);
+                j=intlI; curStCh=intlI; curTop+=fsPx;
+              }
+              else{
+                ctx.fillText(str.slice(curStCh,j+1),lPx,tPx+curTop);
+                curStCh=nxLnSt; j=nxLnSt; curTop+=fsPx; 
+              }
+            }else{
+              // aka on gap:
+              const intlI=j; while(str[j]===' '&&j>curStCh)j--;
+              ctx.fillText(str.slice(curStCh,j+1),lPx,tPx+curTop);
+              j=intlI; while(str[j]===' ')j++; curStCh=j;
+            }
+          }
+        }
+        ctx.fillText(str.slice(curStCh,eCh),lPx,tPx+curTop);
+        break;
+      case 2: // snd - not yet played
+        eles[srcNm].play(); v8[srcTys+srcNm]=20; break;
+      case 3: // vid - not yet played
+        ctx.drawImage(eles[srcNm],lPx,tPx,wPx,hPx);
+        eles[srcNm].play();v8[srcTys+srcNm]=22; break;
+      case 4: // scr
+        read(eles[srcNm],uPx,cxPx,cyPx); break;
+
+
+      // unused ts:
+      case 5:case 6:case 7:
+      case 8:case 9:case 10:case 11:case 12:case 13:case 14:
+      case 15:case 16:case 17:case 18:case 19:break;
+
+      case 20: // snd, has played
+        break;
+      case 21: // snd, played but still to be called by eo
+        v8[srcTys+srcNm]=20; break;
+      case 22: // vid, has played
+        ctx.drawImage(eles[srcNm],lPx,tPx,wPx,hPx); break;
+      case 23: // vid, played but still to be called by eo
+        ctx.drawImage(eles[srcNm],lPx,tPx,wPx,hPx);
+        v8[srcTys+srcNm]=22; break;
+    }
+    ctx.restore();
+  }
+  v32i.fill(0,oSet,oSet+64); v32i[10]=nSet; v32i[11]=oSet;
+  for(let i=0;i<eles.length-1;i++){
+    switch(v8[srcTys+i]){
+    case 0:case 1:case 2:case 3:case 4:case 5:case 6:case 7:
+    case 8:case 9:case 10:case 11:case 12:case 13:case 14:
+    case 15:case 16:case 17:case 18:case 19:break;
+      case 20: v8[srcTys+i]=21; break;
+      case 21: v8[srcTys+i]=2; eles[i].pause(); break;
+      case 22: v8[srcTys+i]=23; break;
+      case 23: v8[srcTys+i]=3; eles[i].pause(); break;
+    }
+  }
+};
+
+// webpage setup
+const onLoad=()=>{
+
+  // select webpage area with click or tap
+  const mouseOrTouchSelect=e=>{
+    const x=e.clientX,y=e.clientY;
+    const a=canv.getBoundingClientRect();
+    const ax=a.x,ay=a.y,aw=a.width,ah=a.height;
+    const b=cwSelect.getBoundingClientRect();
+    const bx=b.x,by=b.y,bw=b.width,bh=b.height;
+    const c=consSelect.getBoundingClientRect();
+    const cx=c.x,cy=c.y,cw=c.width,ch=c.height;
+    if(x>=ax&&x<=ax+aw&&y>=ay&&y<=ay+ah&&selectionState!==1)setSelectionState(1),e.preventDefault();
+    else if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh&&selectionState!==2)setSelectionState(2),e.preventDefault();
+    else if(x>=cx&&x<=cx+cw&&y>=cy&&y<=cy+ch&&selectionState!==3)setSelectionState(3),e.preventDefault();
+  };
+
+
+
+
+
+  // add a bunch of setup funcs inside, also group the sets seperately////
+  setupGlbs(); refresh(null);
+  window.addEventListener('resize',refresh);
+  document.addEventListener('pointerdown', mouseOrTouchSelect);
+  document.addEventListener('keydown',keyboardSelect);
+  document.addEventListener('fullscreenchange',fsExit);
+  document.addEventListener("visibilitychange",()=>setSelectionState(0));
+  codeWriter.addEventListener('keydown',cwKd);
+  codeWriter.addEventListener('input',e=>cpl(e.target.value));
+  codeWriter.addEventListener("copy",e=>{
+    e.preventDefault();
+    e.clipboardData.setData(
+      "text/plain",prepExp(
+        codeWriter.value.substring(
+          codeWriter.selectionStart,codeWriter.selectionEnd
+        )
+      )
+    );
+  });
+  codeWriter.addEventListener("paste",e=>{
+      e.preventDefault();
+      const t=e.clipboardData.getData("text/plain");
+      document.execCommand("insertText",false,prepImp(t));
+  });
+  canv.addEventListener('pointerdown',canvPointer,{passive:false});
+  canv.addEventListener('touchstart',canvPinch,{passive:false});
+
+
+  canv.addEventListener('wheel',canvOS);
+  
+
+
+  consInp.addEventListener('keydown',consInpKd);
+  consInp.addEventListener('input',consInpInp);
+  document.addEventListener('keydown',glbKeyDwn);
+  document.addEventListener('keyup',glbKeyUp);
+  cOut('Welcome to the EventScript prototype');
+  animId=requestAnimationFrame(readGlbVm);
+  window.addEventListener("deviceorientation",e=>{
+    glbVm[4][glbVm[2][7]+4]=e.beta||0; // pitch
+    glbVm[4][glbVm[2][7]+5]=e.gamma||0; // roll
+    glbVm[4][glbVm[2][7]+6]=yaw=e.alpha||0; // yaw
+  });
+  cpl(codeWriter.value);
+};
+
+// calls glbVm read with new dt and date (glb64 0/1)
+const readGlbVm=()=>{
+  const dt=0.001*performance.now()-pgT; pgT+=dt;
+  glbVm[4][glbVm[2][7]+0]=dt;
+  glbVm[4][glbVm[2][7]+1]+=dt;
+  glbVm[4][glbVm[2][7]+2]=Date.now();
+  // glb64s: dt,scrT,date,cursX,cursY,pitch,roll,yaw,ar,nw,nh,vR,vG,vB,vA
+  read(); animId=requestAnimationFrame(readGlbVm);
+};
+
+// refresh display glbs eg on resize:
+const refresh=e=>{
+  rw=canv.offsetWidth*pd;
+  rh=canv.offsetHeight*pd;
+  ru=Math.min(rw,rh); rcx=0.5*rw; rcy=0.5*rh;
+  cx=0.5*canv.offsetWidth,cy=0.5*canv.offsetHeight;
+  canv.width=rw; canv.height=rh;
+  ctx.imageSmoothingEnabled=false; 
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillStyle=`rgb(${curR},${curG},${curB})`;
+  ox=0;oy=0;os=1;
+};
+
+// keyDown->glbVm keyPr/keyDwn on
+const glbKeyDwn=e=>{
+  //8glbs:0-25:keyPr,26-51:keyDwn,52-77:keyUp,78-82:mousePr,83-87:mouseDwn,88-92:mouseUp
+  if(selectionState!==1)return;
+  const idx=e.key.charCodeAt(0)-97;
+  if(idx<0||idx>25)return;
+  glbVm[0][glbVm[2][12]+idx]=1; // keyPr tgl on
+  glbVm[0][glbVm[2][12]+26+idx]=1; // keyDwn tgl o
+};
+
+// keyUp->glbVm keyUp on, keyPr off
+const glbKeyUp=e=>{
+  //8glbs:0-25:keyPr,26-51:keyDwn,52-77:keyUp,78-82:mousePr,83-87:mouseDwn,88-92:mouseUp
+  if(selectionState!==1)return;
+  const idx=e.key.charCodeAt(0)-97;
+  if(idx<0||idx>25)return;
+  glbVm[0][glbVm[2][12]+idx]=0; // keyPr tgl off
+  glbVm[0][glbVm[2][12]+52+idx]=1; // keyDwn tgl on
+};
+
+// canvasDrag->glbVm OX/OY
+const canvPointer=(e)=>{
+  e.preventDefault();
+  if(!e.isPrimary)return;
+  const intlX=e.clientX,intlY=e.clientY,intlOX=ox,intlOY=oy;
+  const move=(e)=>{
+    e.preventDefault();
+    ox=intlOX+(e.clientX-intlX)*pd;
+    oy=intlOY+(e.clientY-intlY)*pd;
+  };
+  const up=(e)=>{
+    document.removeEventListener('pointermove',move);
+    document.removeEventListener('pointerup',up);
+    document.removeEventListener('pointercancel',up);
+  };
+  document.addEventListener('pointermove',move,{passive:false});
+  document.addEventListener('pointerup',up,{passive:false});
+  document.addEventListener('pointercancel',up,{passive:false});
+};
+
+// two-finger pinch zoom
+const canvPinch=(e)=>{
+  if(e.touches.length!==2)return;
+  e.preventDefault();
+  const f1x=e.touches[0].clientX,f1y=e.touches[0].clientY;
+  const f2x=e.touches[1].clientX,f2y=e.touches[1].clientY;
+  const intlOX=ox,intlOY=oy,intlOS=os;
+  const intlDist=Math.hypot(f2x-f1x,f2y-f1y);
+  const move=(e)=>{
+    if(e.touches.length!==2){end();return;}
+    e.preventDefault();
+    const c1x=e.touches[0].clientX,c1y=e.touches[0].clientY;
+    const c2x=e.touches[1].clientX,c2y=e.touches[1].clientY;
+    const curDist=Math.hypot(c2x-c1x,c2y-c1y);
+    const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
+    os=newOS;
+    const ds=newOS/intlOS;
+    ox=ox*ds+(e.clientX-cx)*(1-ds)*pd;
+    oy=oy*ds+(e.clientY-cy)*(1-ds)*pd;
+  };
+  const end=()=>{
+    canv.removeEventListener('touchmove',move);
+    canv.removeEventListener('touchend',end);
+    canv.removeEventListener('touchcancel',end);
+  };
+  canv.addEventListener('touchmove',move,{passive:false});
+  canv.addEventListener('touchend',end,{passive:false});
+  canv.addEventListener('touchcancel',end,{passive:false});
+};
+
+
+// mousewheel->glbVm OS
+const canvOS=(e)=>{
+  const edy=e.deltaY;
+  if(e.ctrlKey){oy+=(0.2*edy);return;}
+  else if(e.altKey){ox+=(0.2*edy);return;}
+  const iOS=os;
+  const newOS=Math.min(1000,Math.max(0.01,iOS+0.001*iOS*-edy));
+  os=newOS;
+  const ds=newOS/iOS; // delta scale
+  ox=ox*ds+(e.clientX-cx)*(1-ds)*pd; // adj ox
+  oy=oy*ds+(e.clientY-cy)*(1-ds)*pd; // adj oy
+};
+
+// webpage selected area, called by touch, click, or tabkey:
+const setSelectionState=n=>{
+  selectionState=n;
+  curtain.style.background=n===1?'#910723':null;
+  cwSelect.style.background=n===2?'#910723':null;
+  consSelect.style.background=n===3?'#910723':null;
+  codeWriter.style.cursor=n===2?null:'default';
+  consInp.style.cursor=n===3?null:'default';
+  canv.style.pointerEvents='none';
+  codeWriter.style.pointerEvents='none';
+  consInp.style.pointerEvents='none';
+  consoleDiv.style.pointerEvents='none';
+  if(n===1)canv.style.pointerEvents='auto';
+  else if(n===2)codeWriter.style.pointerEvents='auto';
+  else if(n===3){
+    consInp.style.pointerEvents='auto';
+    consoleDiv.style.pointerEvents='auto';
+  }
+  consInp.value='>';
+  if(n===0)document.body.focus();
+  else if(n===1)canv.focus();
+  else if(n===2)codeWriter.focus();
+  else if(n===3){
+    consInp.focus();
+    consInp.selectionStart=consInp.selectionEnd=consInp.value.length;
+  }
+};
+
+
+
+// exit webpage area selection with escape (aka nullstate)
+const keyboardSelect=e=>{
+  if(e.key==='Escape')setSelectionState(0);
+  else if(e.key==='Tab'){
+      e.preventDefault();
+      setSelectionState(selectionState===3?1:selectionState+1);
+  }
+};
+
+// run cons cmd onEnter and clear cons
+const consInpKd=e=>{
+  if(e.key==='Enter'){
+    const str=e.target.value; cOut(str,true);
+    consCmd(str); e.target.value='>';
+  }
+};
+
+// maintains indent on cw new ln, nice QOL feature
+const cwKd=(e)=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const cw=codeWriter,cwV=cw.value;
+    const s=codeWriter.selectionStart;
+    const lS=cwV.lastIndexOf('\n',s-1)+1;
+    let i=lS,c=0;
+    while(cwV[i]===' '){c++;i++;}
+    const pad='\n'+Array(c+1).join(' ');
+    codeWriter.value=cwV.substring(0,s)+pad+cwV.substring(cw.selectionEnd);
+    codeWriter.selectionStart=cw.selectionEnd=s+pad.length;
+    cpl(codeWriter.value);
+  }
+};
+
+// fs exit listener (seperate func handles the actual event)
+const fsExit=()=>{
+    if(!document.fullscreenElement)cOut('Exited fullscreen'); refresh(null);
+};
+
+// maintains > during cons input
+const consInpInp=e=>{
+  const v=e.target.value; if(v[0]!='>')e.target.value='>'+v
+};
+
+// console-write, if not frUser, click for auto-copy
+const cOut=(str,frUser=false)=>{
+  const span=document.createElement('span');
+  if(frUser)span.appendChild(document.createTextNode(str));
+  else span.appendChild(document.createTextNode(str));
+  if(!frUser){
+    span.className='consoleLn';
+    span.onmousedown=()=>{
+      if(!span.style.animation){
+        span.style.color='navy'; navigator.clipboard.writeText(str);
+        span.style.animation='colorFade 0.9s ease-in-out forwards';
+        setTimeout(()=>{span.style.animation=null;span.style.color=null;},800);
+      }
+    };
+  }
+  consoleDiv.appendChild(span);consoleDiv.scrollTop=consoleDiv.scrollHeight;
+};
+
+// console commands
+const cmds={
+  '>FS':0,'>RAT':1,'>UPL':2,'>SS':3,'>DON':4,'>DOFF':5,
+  '>EXPTXT':6,'>IMPTXT':7,'>REQ':8,'>CFS':9,'>MFS':10
+}
+const consCmd=(str)=>{
+  let z=0; while(true){if(str[z]===' '||z===str.length)break;z++;}
+  const cmdStr=str.substring(0,z).toUpperCase();
+  const argStr=str.substring(z+1),cmdNum=cmds[cmdStr];
+  const argNm=Number(argStr);
+  switch(cmdNum){
+    case 0: // FS: fullscreen
+      cOut('Entering fullscreen');
+      try{document.body.requestFullscreen(); refresh(null);}
+      catch{cOut('FS blocked by browser. Mobile users: try MFS');}
+      break;
+    case 1: // RAT: canv-workspace visual ratio
+      if(argNm>=10&&argNm<=75){
+        document.body.style.setProperty('--r',argNm);
+        cOut(`canvas-workspace ratio set to ${argNm}%`);
+      }else cOut('RAT expects a number between 10 and 75');
+      refresh(null);
+      break;
+    case 2: // UPL: upl files to loc mem (locFiles glb)
+      // (eles on scr compile prioritise them over fetch req)
+      const hdlChange=async(e)=>{
+        const files=Array.from(e.target.files);
+        cOut(`${files.length} files submitted`);
+        for(let i=0;i<files.length;i++){
+          const file=files[i];
+          locFiles[file.name]=URL.createObjectURL(file);
+          cOut(`${i+1}`); cOut(`${file.name}`);
+          cOut(`${(file.size/1000).toFixed(1)}kB`);
+        }
+        inp.remove();
+      };
+      const inp=document.createElement('input');
+      inp.type='file';
+      inp.multiple=true;
+      inp.addEventListener('change', hdlChange);
+      inp.style.display='none';
+      document.body.appendChild(inp);
+      cOut('Uploading local files');
+      inp.click();
+      break;
+    case 3: // SS: screenshot
+      const url=canv.toDataURL('image/'+fileType);
+      const ele=document.createElement('a');
+      ele.href=url; ele.download='ss.'+fileType;
+      document.body.appendChild(ele); ele.click();
+      document.body.removeChild(ele);
+      break
+    case 4: // DON: draw on
+      cOut('drawOn'); animId=requestAnimationFrame(readGlbVm);
+      break;
+    case 5: // DOFF: draw off
+      cOut('drawOff'); cancelAnimationFrame(animId);
+      break;
+    case 6: // EXPTXT: export scr as txt file
+      const blob=new Blob([codeWriter.value],{type:'text/plain'});
+      const textExpUrl=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=textExpUrl; document.body.appendChild(a);
+      a.click(); window.URL.revokeObjectURL(textExpUrl);
+      document.body.removeChild(a);
+      break;
+    case 7: // IMPTXT: import txt file as scr
+      const input=document.createElement('input');
+      input.type='file';
+      input.onchange=async()=>{
+        const txt=await input.files[0].text();
+        codeWriter.value=txt; cpl(txt); input.remove();
+      };
+      input.click();
+      break;
+    case 8: // REQ: reqs roll/yaw/pitch read, + any others
+      cOut('requesting permission to read roll/yaw/pitch (and others)');
+      if(typeof DeviceOrientationEvent.requestPermission!=='function')
+        cOut('device orientation permission request not supported');
+      else
+      DeviceOrientationEvent.requestPermission().then(r=>{
+        cOut(r==='granted'?'permission granted':'permission denied');
+      })
+      break;
+    case 9: // CFS: canvas fullscreen
+      cOut('Entering canvas fullscreen');
+      try{canv.requestFullscreen(); refresh(null);}
+      catch{cOut('CFS blocked by browser. Mobile users: try MFS');}
+      break;
+    case 10: // MFS: mobile fullscreen (just canv stretch)
+      canv.style.width='100vw'; canv.style.height='100vh';
+      workspace.style.display='none'; refresh(null);
+      const reset=()=>{
+        canv.style.width=null; canv.style.height=null;
+        workspace.style.display=null; refresh(null);
+        document.removeEventListener('visibilitychange',reset);
+        document.removeEventListener('keydown',esc);
+      };
+      const esc=(e)=>{
+        if(event.key==='Escape')reset();
+      };
+      document.addEventListener('visibilitychange',h);
+      document.addEventListener('keydown',esc);
+      break;
+    default: cOut('Invalid command'); 
+  }
+};
+
+// base64 sha-256, for use by small cons-called funcs
+const sha256Base64=async(arrayBuffer)=>{
+  const typedArr=new Uint8Array(await crypto.subtle.digest('SHA-256', arrayBuffer));
+  const chArr=new Array(32);
+  for (let i=0;i<typedArr.length;i++)chArr[i]=String.fromCharCode(typedArr[i]);
+  return btoa(chArr.join('')).slice(0, -1);
+};
+
+// base64k sha-256, experimental alt fingerprint
+const sha256Base64k=async(arrayBuffer)=>{
+  const typedArr=new Uint16Array(await crypto.subtle.digest('SHA-256', arrayBuffer));
+  const chArr=new Array(16);
+  for (let i=0;i<16;i++)chArr[i]=String.fromCodePoint(0xF0000+typedArr[i]);
+  return chArr.join('');
+};
+
+const prepImp=(s)=>s.replaceAll("`","").replaceAll("@"," ").replaceAll("~","\n");
+const prepExp=(s)=>s.replaceAll(" ","@").replaceAll("\n","~");
+
+
+
+</script></body>
