@@ -85,7 +85,6 @@ let lpTrTbl,pfTrTbl,xMap,prm,shunt,srcTys,a8,a16,a32i,a32f,a64,b8,b16,b32i,b32f,
 let selectionState,ctx,rw,rh,ru,cx,cy,rcx,rcy,pgT,pd,animId,glbVm,arrBucket;
 let imgBucket,txtBucket,sndBucket,vidBucket,scrBucket,locFiles;
 let curR,curB,curG,ox,oy,os;
-let fing1IntlX,fing1IntlY,fing2IntlX,fing2IntlY,intlOX,intlOY,intlOS,intlDist;
 
 // setupGlbs - run once on load
 const setupGlbs=()=>{
@@ -1287,7 +1286,6 @@ const onLoad=()=>{
   canv.addEventListener('mousedown',canvOXY);
   canv.addEventListener('wheel',canvOS);
   canv.addEventListener('touchstart',canvTch,{passive:false});
-  canv.addEventListener('touchmove',canvTchMv,{passive:false});
   consInp.addEventListener('keydown',consInpKd);
   consInp.addEventListener('input',consInpInp);
   document.addEventListener('keydown',glbKeyDwn);
@@ -1374,48 +1372,50 @@ const canvOS=(e)=>{
   oy=oy*ds+(e.clientY-cy)*(1-ds)*pd; // adj oy
 };
 
-// one-finger drag, two-finger zoom (glb set on tchdwn)
+// one-finger drag, two-finger zoom
 const canvTch=(e)=>{
-  e.preventDefault();  cOut(e.touches.length);
-  let has0,has1;
-  for(let i=0;i<e.touches.length;i++){
-    const tch=e.touches[i],id=tch.identifier;
-    if(id===0)has0=tch;else if(id===1)has1=tch;
-  }
-  if(has0&&has1){
-    fing1IntlX=has0.clientX,fing1IntlY=has0.clientY;
-    fing2IntlX=has1.clientX,fing2IntlY=has1.clientY;
-    intlOX=ox,intlOY=oy,intlOS=os;
-    intlDist=Math.hypot(fing2IntlX-fing1IntlX,fing2IntlY-fing1IntlY);
-  }else if(has0){
-    fing1IntlX=has0.clientX,fing1IntlY=has0.clientY;
-    intlOX=ox,intlOY=oy;;
+  e.preventDefault();
+  if(e.touches[0]?.identifier===0&&e.touches[1]?.identifier===1){
+    const fing1IntlX=e.touches[0].clientX,fing1IntlY=e.touches[0].clientY;
+    const fing2IntlX=e.touches[1].clientX,fing2IntlY=e.touches[1].clientY;
+    const intlOX=ox,intlOY=oy,intlOS=os;
+    const intlDist=Math.hypot(fing2IntlX-fing1IntlX,fing2IntlY-fing1IntlY);
+    const move=(e)=>{
+      e.preventDefault();
+      if(e.touches[0]?.identifier!==0||e.touches[1]?.identifier!==1)return;
+      const curX0=e.touches[0].clientX,curY0=e.touches[0].clientY;
+      const curX1=e.touches[1].clientX,curY1=e.touches[1].clientY;
+      const curDist=Math.hypot(curX1-curX0,curY1-curY0);
+      const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
+      os=newOS; const ds=newOS/intlOS;
+      ox=ox*ds+(e.clientX-cx)*(1-ds)*pd; oy=oy*ds+(e.clientY-cy)*(1-ds)*pd;
+  };
+    const end=(e)=>{
+      canv.removeEventListener('touchmove',move);
+      canv.removeEventListener('touchend',end);
+    };
+    canv.addEventListener('touchmove',move,{passive:false});
+    canv.addEventListener('touchend',end,{passive:false});
+  }else if(e.touches[0]?.identifier===0){
+    const fing1IntlX=e.touches[0].clientX,fing1IntlY=e.touches[0].clientY;
+    const intlOX=ox,intlOY=oy;
+    const move=(e)=>{
+      e.preventDefault();
+      if(e.touches[0]?.identifier!==0)return;
+      const curX=e.touches[0].clientX,curY=e.touches[0].clientY;
+      const dx=curX-fing1IntlX,dy=curY-fing1IntlY;
+      ox=intlOX+dx*pd;oy=intlOY+dy*pd;
+    };
+    const end=(e)=>{
+      canv.removeEventListener('touchmove',move);
+      canv.removeEventListener('touchend',end);
+    };
+    canv.addEventListener('touchmove',move,{passive:false});
+    canv.addEventListener('touchend',end,{passive:false});
   }
 };
 
-// one-finger drag, two-finger zoom (edits display glbs on touchmove)
-const canvTchMv=(e)=>{
-  e.preventDefault();
-  let has0,has1;
-  for(let i=0;i<e.touches.length;i++){
-    const tch=e.touches[i],id=tch.identifier;
-    if(id===0)has0=tch;else if(id===1)has1=tch;
-  }
-  if(has0&&has1){
-    const curX0=has0.clientX,curY0=has0.clientY;
-    const curX1=has1.clientX,curY1=has1.clientY;
-    const curDist=Math.hypot(curX1-curX0,curY1-curY0);
-    const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
-    os=newOS;
-    const ds=newOS/intlOS;
-    ox=ox*ds+(e.clientX-cx)*(1-ds)*pd;
-    oy=oy*ds+(e.clientY-cy)*(1-ds)*pd;
-  }else if(has0){
-    const curX=has0.clientX,curY=has0.clientY;
-    const dx=curX-fing1IntlX,dy=curY-fing1IntlY;
-    ox=intlOX+dx*pd;oy=intlOY+dy*pd;
-  }
-};
+
 
 // webpage selected area, called by touch, click, or tabkey:
 const setSelectionState=n=>{
