@@ -5,17 +5,17 @@
   <link rel="icon" href="appIcon.png" sizes="180x180">
   <link rel="apple-touch-icon" href="appIcon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="EventScript44">
+  <meta name="apple-mobile-web-app-title" content="EventScript57">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
   <style>
     html{overscroll-behavior:none}
     body{--r:75;background:black;/**/margin:0}
-    #canv{background-color:black;outline:none;pointer-events:none;position:fixed}
-    #codeWriter{background-color:#1d1919;border:none;border-radius:0;/**/box-shadow:12px 12px #000010;color:#abb3b2;font-size:14px;font-family:monospace;outline:none;pointer-events:none;position:absolute;resize:none;scrollbar-color:#5a5a5a transparent;white-space:pre}
-    #consInp{background-color:navy;border:none;/**/border-radius:0;/**/bottom:28px;color:#576dba;font-family:monospace;font-size:16px;outline:none;pointer-events:none;position:absolute;right:28px;top:calc(100% - 48px)}
+    #canv{background-color:black;outline:none;pointer-events:none;position:fixed;touch-action:none}
+    #codeWriter{background-color:#1d1919;border:none;border-radius:0;/**/box-shadow:12px 12px #000010;color:#abb3b2;font-size:14px;font-family:monospace;outline:none;pointer-events:none;position:absolute;resize:none;scrollbar-color:#5a5a5a transparent;touch-action:none;white-space:pre}
+    #consInp{background-color:navy;border:none;/**/border-radius:0;/**/bottom:28px;color:#576dba;font-family:monospace;font-size:16px;outline:none;pointer-events:none;position:absolute;right:28px;top:calc(100% - 48px);touch-action:none}
     #consSelect{bottom:0;position:absolute;right:0;}
-    #consoleDiv{background-color:#0d0a42;bottom:70px;color:#52688e;box-shadow:12px 12px #000010;display:flex;flex-direction:column;font-family:monospace;font-size:12px;justify-content:flex-end;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;pointer-events:none;position:absolute;right:28px;scrollbar-color:#4d63b0 transparent;scroll-behavior:smooth;word-wrap:break-word}
+    #consoleDiv{background-color:#0d0a42;bottom:70px;color:#52688e;box-shadow:12px 12px #000010;display:flex;flex-direction:column;font-family:monospace;font-size:12px;justify-content:flex-end;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;pointer-events:none;position:absolute;right:28px;scrollbar-color:#4d63b0 transparent;scroll-behavior:smooth;touch-action:none;word-wrap:break-word}
     .consoleLn{cursor:default}
     #curtain{position:absolute;background:#6178ad}
     #cwSelect{position:absolute}
@@ -1258,12 +1258,30 @@ const read=(vm=glbVm,vmUPx=ru,vmCXPx=rcx,vmCYPx=rcy,vmOX=ox,vmOY=oy,vmOS=os)=>{
 
 // webpage setup
 const onLoad=()=>{
+
+  // select webpage area with click or tap
+  const mouseOrTouchSelect=e=>{
+    const x=e.clientX,y=e.clientY;
+    const a=canv.getBoundingClientRect();
+    const ax=a.x,ay=a.y,aw=a.width,ah=a.height;
+    const b=cwSelect.getBoundingClientRect();
+    const bx=b.x,by=b.y,bw=b.width,bh=b.height;
+    const c=consSelect.getBoundingClientRect();
+    const cx=c.x,cy=c.y,cw=c.width,ch=c.height;
+    if(x>=ax&&x<=ax+aw&&y>=ay&&y<=ay+ah&&selectionState!==1)setSelectionState(1),e.preventDefault();
+    else if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh&&selectionState!==2)setSelectionState(2),e.preventDefault();
+    else if(x>=cx&&x<=cx+cw&&y>=cy&&y<=cy+ch&&selectionState!==3)setSelectionState(3),e.preventDefault();
+  };
+
+
+
+
+
   // add a bunch of setup funcs inside, also group the sets seperately////
   setupGlbs(); refresh(null);
   window.addEventListener('resize',refresh);
-  document.addEventListener('mousedown',mouseOrTouchSelect);
+  document.addEventListener('pointerdown', mouseOrTouchSelect);
   document.addEventListener('keydown',keyboardSelect);
-  document.addEventListener('touchstart',mouseOrTouchSelect,{passive:false});
   document.addEventListener('fullscreenchange',fsExit);
   document.addEventListener("visibilitychange",()=>setSelectionState(0));
   codeWriter.addEventListener('keydown',cwKd);
@@ -1283,9 +1301,14 @@ const onLoad=()=>{
       const t=e.clipboardData.getData("text/plain");
       document.execCommand("insertText",false,prepImp(t));
   });
-  canv.addEventListener('mousedown',canvOXY);
+  canv.addEventListener('pointerdown',down1,{passive:false});
+  
+
+
   canv.addEventListener('wheel',canvOS);
-  canv.addEventListener('touchstart',canvTch,{passive:false});
+  
+
+
   consInp.addEventListener('keydown',consInpKd);
   consInp.addEventListener('input',consInpInp);
   document.addEventListener('keydown',glbKeyDwn);
@@ -1344,20 +1367,67 @@ const glbKeyUp=e=>{
 };
 
 // canvasDrag->glbVm OX/OY
-const canvOXY=e=>{
-  const ix=e.clientX,iy=e.clientY
-  const iOX=ox,iOY=oy;
-  const mm=(e)=>{
-    const dx=e.clientX-ix,dy=e.clientY-iy;
-    ox=iOX+dx*pd; oy=iOY+dy*pd;
+const down1=(e)=>{
+  const down2=(e)=>{
+    e.preventDefault();
+    twoFFlg=true,intlX2=e.clientX,intlY2=e.clientY;
+    intlDist=Math.hypot(intlX2-intlX1,intlY2-intlY1);
+    intlCX=(intlX1+intlX2)/2,intlCY=(intlY1+intlY2)/2;
+    canv.addEventListener('pointerup',up2,{passive:false});
+    canv.removeEventListener('pointerdown',down2);
+    canv.addEventListener('pointermove',move2,{passive:false});
   };
-  const mu=()=>{
-    document.removeEventListener('mousemove',mm);
-    document.removeEventListener('mouseup',mu);
+  const up1=(e)=>{
+    e.preventDefault();
+    canv.removeEventListener('pointermove',move1);
+    canv.removeEventListener('pointerdown',down2);
+    canv.removeEventListener('pointerup',up1);
+    canv.removeEventListener('pointercancel',up1);
+    canv.addEventListener('pointerdown',down1,{passive:false});
   };
-  document.addEventListener('mousemove',mm);
-  document.addEventListener('mouseup',mu);
+  const up2=(e)=>{
+    e.preventDefault();
+    twoFFlg=false;
+    canv.addEventListener('pointerdown',down2,{passive:false});
+    canv.addEventListener('pointerup',up1,{passive:false});
+    canv.removeEventListener('pointermove',move2);
+  };
+  const zoomMove=()=>{
+    const curDist=Math.hypot(curX2-curX1,curY2-curY1);
+    const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
+    const curCX=(curX1+curX2)/2,curCY=(curY1+curY2)/2;
+    os=newOS; const ds=newOS/intlOS;
+    ox=ox*ds+(curCX-cx)*(1-ds)*pd;
+    oy=oy*ds+(curCY-cy)*(1-ds)*pd;
+    intlOX=ox; intlOY=oy;
+    ox=intlOX+(curCX-intlCX)*pd;
+    oy=intlOY+(curCY-intlCY)*pd;
+  };
+  const move1=(e)=>{
+    e.preventDefault(); curX1=e.clientX; curY1=e.clientY;
+    if(twoFFlg){
+      zoomMove();
+    }else{
+      ox=intlOX+(curX1-intlX1)*pd;
+      oy=intlOY+(curY1-intlY1)*pd;
+    }
+  };
+  const move2=(e)=>{
+    e.preventDefault(); curX2=e.clientX; curY2=e.clientY;
+    zoomMove();
+  };
+  e.preventDefault();
+  canv.removeEventListener('pointerdown',down1);
+  canv.addEventListener('pointermove',move1,{passive:false});
+  canv.addEventListener('pointerup',up1,{passive:false});
+  canv.addEventListener('pointercancel',up1,{passive:false});
+  const intlX1=e.clientX,intlY1=e.clientY,intlOX=ox,intlOY=oy,intlOS=os;
+  let twoFFlg=false,intlX2,intlY2,curX1=intlX1,curY1=intlY1,curX2,curY2,intlDist,intlCX,intlCY;
 };
+
+
+
+
 
 // mousewheel->glbVm OS
 const canvOS=(e)=>{
@@ -1372,52 +1442,7 @@ const canvOS=(e)=>{
   oy=oy*ds+(e.clientY-cy)*(1-ds)*pd; // adj oy
 };
 
-// one-finger drag, two-finger zoom
-const canvTch=(e)=>{
-  e.preventDefault();
-  if(e.touches[0]?.identifier===0&&e.touches[1]?.identifier===1){
-    const fing1IntlX=e.touches[0].clientX,fing1IntlY=e.touches[0].clientY;
-    const fing2IntlX=e.touches[1].clientX,fing2IntlY=e.touches[1].clientY;
-    const intlOX=ox,intlOY=oy,intlOS=os;
-    const intlDist=Math.hypot(fing2IntlX-fing1IntlX,fing2IntlY-fing1IntlY);
-    const move=(e)=>{
-      e.preventDefault();
-      if(e.touches[0]?.identifier!==0||e.touches[1]?.identifier!==1)return;
-      const curX0=e.touches[0].clientX,curY0=e.touches[0].clientY;
-      const curX1=e.touches[1].clientX,curY1=e.touches[1].clientY;
-      const curDist=Math.hypot(curX1-curX0,curY1-curY0);
-      const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
-      os=newOS; const ds=newOS/intlOS;
-      ox=ox*ds+(e.clientX-cx)*(1-ds)*pd; oy=oy*ds+(e.clientY-cy)*(1-ds)*pd;
-  };
-    const end=(e)=>{
-      canv.removeEventListener('touchmove',move);
-      canv.removeEventListener('touchend',end);
-    };
-    canv.addEventListener('touchmove',move,{passive:false});
-    canv.addEventListener('touchend',end,{passive:false});
-  }else if(e.touches[0]?.identifier===0){
-    const fing1IntlX=e.touches[0].clientX,fing1IntlY=e.touches[0].clientY;
-    const intlOX=ox,intlOY=oy;
-    const move=(e)=>{
-      e.preventDefault();
-      if(e.touches[0]?.identifier!==0)return;
-      const curX=e.touches[0].clientX,curY=e.touches[0].clientY;
-      const dx=curX-fing1IntlX,dy=curY-fing1IntlY;
-      ox=intlOX+dx*pd;oy=intlOY+dy*pd;
-    };
-    const end=(e)=>{
-      canv.removeEventListener('touchmove',move);
-      canv.removeEventListener('touchend',end);
-    };
-    canv.addEventListener('touchmove',move,{passive:false});
-    canv.addEventListener('touchend',end,{passive:false});
-  }
-};
-
-
-
-// webpage selected area, called by touch, click, or tabkey:
+// webpage selected area, called by pointer, or tabkey:
 const setSelectionState=n=>{
   selectionState=n;
   curtain.style.background=n===1?'#910723':null;
@@ -1443,21 +1468,6 @@ const setSelectionState=n=>{
     consInp.focus();
     consInp.selectionStart=consInp.selectionEnd=consInp.value.length;
   }
-};
-
-// select webpage area with click or tap
-const mouseOrTouchSelect=e=>{
-  const x=e.clientX??e.touches?.[0]?.clientX;
-  const y=e.clientY??e.touches?.[0]?.clientY;
-  const a=canv.getBoundingClientRect();
-  const ax=a.x,ay=a.y,aw=a.width,ah=a.height;
-  const b=cwSelect.getBoundingClientRect();
-  const bx=b.x,by=b.y,bw=b.width,bh=b.height;
-  const c=consSelect.getBoundingClientRect();
-  const cx=c.x,cy=c.y,cw=c.width,ch=c.height;
-  if(x>=ax&&x<=ax+aw&&y>=ay&&y<=ay+ah&&selectionState!==1)setSelectionState(1),e.preventDefault();
-  else if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh&&selectionState!==2)setSelectionState(2),e.preventDefault();
-  else if(x>=cx&&x<=cx+cw&&y>=cy&&y<=cy+ch&&selectionState!==3)setSelectionState(3),e.preventDefault();
 };
 
 // exit webpage area selection with escape (aka nullstate)
