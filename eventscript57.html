@@ -1370,17 +1370,19 @@ const glbKeyUp=e=>{
 const down1=(e)=>{
   const down2=(e)=>{
     e.preventDefault();
-    twoFFlg=true,intlX2=e.clientX,intlY2=e.clientY;
-    intlDist=Math.hypot(intlX2-intlX1,intlY2-intlY1);
-    intlCX=(intlX1+intlX2)/2,intlCY=(intlY1+intlY2)/2;
+    twoFFlg=true;
+    prevX2=e.clientX;
+    prevY2=e.clientY;
+    prevDist=Math.hypot(prevX2-prevX1,prevY2-prevY1);
+    prevCX=(prevX1+prevX2)/2;
+    prevCY=(prevY1+prevY2)/2;
+    canv.addEventListener('pointermove',move2,{passive:false});
     canv.addEventListener('pointerup',up2,{passive:false});
     canv.removeEventListener('pointerdown',down2);
-    canv.addEventListener('pointermove',move2,{passive:false});
   };
   const up1=(e)=>{
     e.preventDefault();
     canv.removeEventListener('pointermove',move1);
-    canv.removeEventListener('pointerdown',down2);
     canv.removeEventListener('pointerup',up1);
     canv.removeEventListener('pointercancel',up1);
     canv.addEventListener('pointerdown',down1,{passive:false});
@@ -1388,42 +1390,51 @@ const down1=(e)=>{
   const up2=(e)=>{
     e.preventDefault();
     twoFFlg=false;
+    prevX1=prevX2;
+    prevY1=prevY2;
+    canv.removeEventListener('pointermove',move2);
     canv.addEventListener('pointerdown',down2,{passive:false});
     canv.addEventListener('pointerup',up1,{passive:false});
-    canv.removeEventListener('pointermove',move2);
-  };
-  const zoomMove=()=>{
-    const curDist=Math.hypot(curX2-curX1,curY2-curY1);
-    const newOS=Math.min(1000,Math.max(0.01,intlOS*curDist/intlDist));
-    const curCX=(curX1+curX2)/2,curCY=(curY1+curY2)/2;
-    os=newOS; const ds=newOS/intlOS;
-    ox=ox*ds+(curCX-cx)*(1-ds)*pd;
-    oy=oy*ds+(curCY-cy)*(1-ds)*pd;
-    intlOX=ox; intlOY=oy;
-    ox=intlOX+(curCX-intlCX)*pd;
-    oy=intlOY+(curCY-intlCY)*pd;
   };
   const move1=(e)=>{
-    e.preventDefault(); curX1=e.clientX; curY1=e.clientY;
+    e.preventDefault();
+    const dx=e.clientX-prevX1,dy=e.clientY-prevY1;
     if(twoFFlg){
-      zoomMove();
+      const curCX=(prevX1+prevX2)/2,curCY=(prevY1+prevY2)/2;
+      const curDist=Math.hypot(prevX2-prevX1,prevY2-prevY1);
+      const ds=curDist/prevDist;
+      os*=ds;
+      ox=ox*ds+(curCX-prevCX)*(1-ds)*pd;
+      oy=oy*ds+(curCY-prevCY)*(1-ds)*pd;
+      ox+=(curCX-prevCX)*pd;
+      oy+=(curCY-prevCY)*pd;
+      prevDist=curDist;
+      prevCX=curCX;
+      prevCY=curCY;
+      cOut(1);
     }else{
-      ox=intlOX+(curX1-intlX1)*pd;
-      oy=intlOY+(curY1-intlY1)*pd;
+      ox+=dx*pd;
+      oy+=dy*pd;
+      cOut(0);
     }
+    prevX1=e.clientX;
+    prevY1=e.clientY;
   };
   const move2=(e)=>{
-    e.preventDefault(); curX2=e.clientX; curY2=e.clientY;
-    zoomMove();
+    e.preventDefault();
+    prevX2=e.clientX;
+    prevY2=e.clientY;
+    move1(e);
+    cOut(2);
   };
+  let twoFFlg=false,prevX1=e.clientX,prevY1=e.clientY,prevX2,prevY2,prevDist,prevCX,prevCY;
   e.preventDefault();
   canv.removeEventListener('pointerdown',down1);
   canv.addEventListener('pointermove',move1,{passive:false});
   canv.addEventListener('pointerup',up1,{passive:false});
   canv.addEventListener('pointercancel',up1,{passive:false});
-  const intlX1=e.clientX,intlY1=e.clientY,intlOX=ox,intlOY=oy,intlOS=os;
-  let twoFFlg=false,intlX2,intlY2,curX1=intlX1,curY1=intlY1,curX2,curY2,intlDist,intlCX,intlCY;
 };
+
 
 
 
