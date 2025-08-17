@@ -1301,7 +1301,7 @@ const onLoad=()=>{
       const t=e.clipboardData.getData("text/plain");
       document.execCommand("insertText",false,prepImp(t));
   });
-  canv.addEventListener('pointerdown',down1,{passive:false});
+  canv.addEventListener('pointerdown',canvPtr,{passive:false});
   
 
 
@@ -1365,6 +1365,56 @@ const glbKeyUp=e=>{
   glbVm[0][glbVm[2][12]+idx]=0; // keyPr tgl off
   glbVm[0][glbVm[2][12]+52+idx]=1; // keyDwn tgl on
 };
+
+
+
+const tchs=new Map();
+
+// canvasDrag->glbVm OX/OY
+const canvPtr=(e)=>{
+  const mm=(e)=>{
+    e.preventDefault();
+    const oldX=tchs.get(e.pointerId).x,oldY=tchs.get(e.pointerId).y;
+    const newX=e.clientX,newY=e.clientY;
+    // 1: pan
+    let sumX=0,sumY=0; for(let[k,v]of tchs)sumX+=v.x,sumY+=v.y;
+    const intlAvgX=sumX/tchs.size,intlAvgY=sumY/tchs.size;
+    sumX-=oldX; sumY-=oldY; sumX+=newX; sumY+=newY;
+    const newAvgX=sumX/tchs.size,newAvgY=sumY/tchs.size;
+    ox+=(newAvgX-intlAvgX)*pd; oy+=(newAvgY-intlAvgY)*pd;
+    // 2: scale 
+    
+    let distSum=0;
+    for(let[k,v]of tchs)distSum+=Math.hypot(v.x-intlAvgX,v.y-intlAvgY);
+    const intlAvgDist=distSum/tchs.size;
+    distSum-=Math.hypot(oldX-intlAvgX,oldY-intlAvgY);
+    distSum+=Math.hypot(newX-intlAvgX,newY-intlAvgY);
+    const newAvgDist=distSum/tchs.size;
+    const ds=intlAvgDist===0?1:newAvgDist/intlAvgDist;
+    os*=ds; // might be old avg x or might feel more natural to do in other order..
+    cOut(ds);
+    ox=ox*ds+(newAvgX-cx)*(1-ds);
+    oy=oy*ds+(newAvgY-cy)*(1-ds);
+    // 3: set new vals for other/future move calls
+    tchs.get(e.pointerId).x=e.clientX; tchs.get(e.pointerId).y=e.clientY;
+  };
+  const up=(e)=>{
+    e.preventDefault();
+    tchs.delete(e.pointerId);
+    canv.removeEventListener('pointermove',mm);
+    canv.removeEventListener('pointerup',up);
+    canv.removeEventListener('pointercancel',up);
+  }
+  e.preventDefault();
+  tchs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  canv.addEventListener('pointermove',mm);
+  canv.addEventListener('pointerup',up);
+  canv.addEventListener('pointercancel',up);
+};
+
+
+
+
 
 // canvasDrag->glbVm OX/OY
 const down1=(e)=>{
